@@ -24,11 +24,11 @@ import {
 // Design tokens — "desk lamp" workspace: dark charcoal-blue desk, warm amber
 // spotlight on whichever tool you're using.
 // ---------------------------------------------------------------------------
-const BG = "#1B2430"; // desk surface
-const PANEL = "#232D3B"; // card / panel surface
-const PANEL_LINE = "#324156";
-const AMBER = "#F472B6"; // accent color (now pink)
-const AMBER_SOFT = "rgba(244, 114, 182, 0.16)";
+const BG = "#334355"; // background
+const PANEL = "#3D4E63"; // card / panel surface (lighter tint of background)
+const PANEL_LINE = "#4C5F77";
+const AMBER = "#66FCFC"; // button / accent color
+const AMBER_SOFT = "rgba(102, 252, 252, 0.16)";
 const TEXT = "#EDEFF3";
 const SUBTEXT = "#93A0B4";
 const DANGER = "#E3796B";
@@ -66,13 +66,13 @@ const STORE_KEYS = {
 
 const TASK_STATUS = {
   todo: { label: "Not Started", color: "#93A0B4" },
-  doing: { label: "In Progress", color: "#F2A65A" },
+  doing: { label: "In Progress", color: "#66FCFC" },
   done: { label: "Done", color: "#6EE7C9" },
   stuck: { label: "Stuck", color: "#E3796B" },
 };
 
 const COMM_STATUS = {
-  waiting: { label: "Waiting Reply", color: "#F2A65A" },
+  waiting: { label: "Waiting Reply", color: "#66FCFC" },
   pending: { label: "Pending", color: "#E3796B" },
   done: { label: "Done", color: "#6EE7C9" },
 };
@@ -155,7 +155,7 @@ function PrimaryButton({ onClick, children }) {
   return (
     <button
       onClick={onClick}
-      style={{ backgroundColor: AMBER, color: "#33210C" }}
+      style={{ backgroundColor: AMBER, color: "#344356" }}
       className="flex items-center gap-1.5 text-sm font-semibold rounded-full px-4 py-1.5 hover:brightness-110 transition-all"
     >
       {children}
@@ -1121,7 +1121,7 @@ function SrStamp({ status }) {
     <span
       style={{
         border: `2px solid ${color}`,
-        color: filled ? "#0B2A22" : color,
+        color: filled ? "#344356" : color,
         backgroundColor: filled ? color : "transparent",
       }}
       className="text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0 whitespace-nowrap"
@@ -1230,7 +1230,7 @@ function SrEntryCard({ entry, groups, refLabel, refPlaceholder, onUpdate, onDele
                         style={{ borderColor: AMBER, backgroundColor: checked ? AMBER : "transparent" }}
                         className="w-4 h-4 shrink-0 border rounded-sm flex items-center justify-center"
                       >
-                        {checked && <CheckCircle2 size={12} color="#33210C" strokeWidth={3} />}
+                        {checked && <CheckCircle2 size={12} color="#344356" strokeWidth={3} />}
                       </span>
                       <span style={{ color: TEXT }} className="text-[13px] leading-tight">{item.label}</span>
                     </label>
@@ -1308,7 +1308,7 @@ function SelfReviewView({ srJeEntries, setSrJeEntries, srBlEntries, setSrBlEntri
           onClick={() => setSubTab("je")}
           style={{
             backgroundColor: subTab === "je" ? AMBER : "transparent",
-            color: subTab === "je" ? "#33210C" : AMBER,
+            color: subTab === "je" ? "#344356" : AMBER,
             borderColor: AMBER,
           }}
           className="text-sm font-semibold rounded-full border px-4 py-1.5"
@@ -1319,7 +1319,7 @@ function SelfReviewView({ srJeEntries, setSrJeEntries, srBlEntries, setSrBlEntri
           onClick={() => setSubTab("bl")}
           style={{
             backgroundColor: subTab === "bl" ? AMBER : "transparent",
-            color: subTab === "bl" ? "#33210C" : AMBER,
+            color: subTab === "bl" ? "#344356" : AMBER,
             borderColor: AMBER,
           }}
           className="text-sm font-semibold rounded-full border px-4 py-1.5"
@@ -1601,7 +1601,7 @@ export default function PersonalWorkbench() {
   return (
     <div style={{ backgroundColor: BG, fontFamily: FONT, minHeight: "100%" }} className="w-full rounded-lg overflow-hidden flex flex-col sm:flex-row">
       {/* Sidebar */}
-      <div style={{ backgroundColor: "#161D27", borderColor: PANEL_LINE }} className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r flex sm:flex-col">
+      <div style={{ backgroundColor: "#28323F", borderColor: PANEL_LINE }} className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r flex sm:flex-col">
         <div className="px-4 py-4 hidden sm:block">
           <div style={{ color: TEXT }} className="font-bold text-base">Personal Workbench</div>
           <div style={{ color: SUBTEXT }} className="text-[11px] mt-0.5">Your daily desk</div>
@@ -1626,7 +1626,7 @@ export default function PersonalWorkbench() {
                 <Icon size={16} />
                 {item.label}
                 {item.key === "todos" && openTodoCount > 0 && (
-                  <span style={{ backgroundColor: AMBER, color: "#33210C" }} className="text-[10px] font-bold rounded-full px-1.5 py-0.5 ml-auto">
+                  <span style={{ backgroundColor: AMBER, color: "#344356" }} className="text-[10px] font-bold rounded-full px-1.5 py-0.5 ml-auto">
                     {openTodoCount}
                   </span>
                 )}
