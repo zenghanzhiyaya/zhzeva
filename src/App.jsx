@@ -25,8 +25,8 @@ import {
 const BG = "#1B2430"; // desk surface
 const PANEL = "#232D3B"; // card / panel surface
 const PANEL_LINE = "#324156";
-const AMBER = "#F2A65A"; // desk-lamp glow accent
-const AMBER_SOFT = "rgba(242, 166, 90, 0.16)";
+const AMBER = "#F472B6"; // desk-lamp glow accent
+const AMBER_SOFT = "rgba(244, 114, 182, 0.16)";
 const TEXT = "#EDEFF3";
 const SUBTEXT = "#93A0B4";
 const DANGER = "#E3796B";
@@ -59,13 +59,13 @@ const STORE_KEYS = {
 
 const TASK_STATUS = {
   todo: { label: "Not Started", color: "#93A0B4" },
-  doing: { label: "In Progress", color: "#F2A65A" },
+  doing: { label: "In Progress", color: "#F472B6" },
   done: { label: "Done", color: "#6EE7C9" },
   stuck: { label: "Stuck", color: "#E3796B" },
 };
 
 const COMM_STATUS = {
-  waiting: { label: "Waiting Reply", color: "#F2A65A" },
+  waiting: { label: "Waiting Reply", color: "#F472B6" },
   pending: { label: "Pending", color: "#E3796B" },
   done: { label: "Done", color: "#6EE7C9" },
 };
