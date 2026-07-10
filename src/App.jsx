@@ -1599,7 +1599,7 @@ export default function PersonalWorkbench() {
   const openTodoCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
 
   return (
-    <div style={{ backgroundColor: BG, fontFamily: FONT, minHeight: "100%" }} className="w-full rounded-lg overflow-hidden flex flex-col sm:flex-row">
+    <div style={{ backgroundColor: BG, fontFamily: FONT, minHeight: "100vh" }} className="w-full flex flex-col sm:flex-row">
       {/* Sidebar */}
       <div style={{ backgroundColor: "#28323F", borderColor: PANEL_LINE }} className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r flex sm:flex-col">
         <div className="px-4 py-4 hidden sm:block">
