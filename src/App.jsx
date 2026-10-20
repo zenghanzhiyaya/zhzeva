@@ -253,7 +253,10 @@ function MeetingsView({ meetings, setMeetings }) {
                   <Field label="Date" type="date" value={m.date} onChange={(v) => update(m.id, { date: v })} />
                   <Field label="Attendees" value={m.attendees} onChange={(v) => update(m.id, { attendees: v })} placeholder="e.g. Alex, Jamie" />
                 </div>
-                <TextAreaField label="Meeting Notes" value={m.notes} onChange={(v) => update(m.id, { notes: v })} placeholder="Discussion points, decisions…" />
+                <div className="flex flex-col gap-1">
+                  <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Meeting Notes</span>
+                  <AutoTextArea minHeight="110px" value={m.notes} onChange={(v) => update(m.id, { notes: v })} placeholder="Discussion points, decisions…" />
+                </div>
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Action Items</span>
@@ -810,7 +813,7 @@ const ENTRY_STATUS = {
   approved: { label: "Approved", color: "#6EE7C9" },
 };
 
-function AutoTextArea({ value, onChange, placeholder }) {
+function AutoTextArea({ value, onChange, placeholder, minHeight }) {
   const ref = useRef(null);
   const lastW = useRef(0);
   const fit = () => {
@@ -839,7 +842,7 @@ function AutoTextArea({ value, onChange, placeholder }) {
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)", overflow: "hidden" }}
+      style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)", overflow: "hidden", minHeight }}
       className="w-full text-sm rounded-md border px-2.5 py-1.5 outline-none resize-none"
     />
   );
@@ -998,7 +1001,8 @@ function JeTrackerView({ entries, setEntries }) {
                 style={inputStyle}
                 className="w-full text-sm rounded-md border px-2.5 py-1.5 outline-none font-mono"
               />
-              <select
+              <div className="flex flex-col gap-2">
+                <select
                 value={e.status}
                 onChange={(ev) => update(e.id, { status: ev.target.value })}
                 style={selStyle(e.status)}
@@ -1008,6 +1012,21 @@ function JeTrackerView({ entries, setEntries }) {
                   <option key={k} value={k} style={{ color: "#344356" }}>{v.label}</option>
                 ))}
               </select>
+                {e.status === "approved" && (
+                  <div
+                    style={{
+                      color: "#EF4444",
+                      border: "3px solid #EF4444",
+                      boxShadow: `inset 0 0 0 2px ${BG}, inset 0 0 0 3.5px #EF4444`,
+                      transform: "rotate(-6deg)",
+                      letterSpacing: "0.12em",
+                    }}
+                    className="self-center rounded-md px-4 py-1.5 text-3xl font-black uppercase select-none opacity-90"
+                  >
+                    Approved
+                  </div>
+                )}
+              </div>
               <div className="col-span-2 md:col-span-1 order-last md:order-none">
                 <AutoTextArea value={e.note || ""} onChange={(v) => update(e.id, { note: v })} placeholder="Note…" />
               </div>
