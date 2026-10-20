@@ -1,12 +1,11 @@
 {
-  "name": "workbench-site",
+  "name": "personal-workbench",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {

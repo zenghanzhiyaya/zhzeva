@@ -1,7 +1,7 @@
 {
   "name": "Personal Workbench",
   "short_name": "Workbench",
-  "description": "Meetings, To-Do, Tasks, Follow-ups, Training Notes, Docs & Links, Contacts, and Self-Review Tracker in one place.",
+  "description": "Meetings, To-Do, Tasks, Follow-ups, Contacts and JE Tracker in one place.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
