@@ -14,21 +14,64 @@ import {
   MessageCircle,
   Contact,
   FileSpreadsheet,
+  Settings as SettingsIcon,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Design tokens — "desk lamp" workspace: dark charcoal-blue desk, warm amber
 // spotlight on whichever tool you're using.
 // ---------------------------------------------------------------------------
-const BG = "#334355"; // background
-const PANEL = "#3D4E63"; // card / panel surface (lighter tint of background)
-const PANEL_LINE = "#4C5F77";
-const AMBER = "#66FCFC"; // button / accent color
-const AMBER_SOFT = "rgba(102, 252, 252, 0.16)";
-const TEXT = "#EDEFF3";
-const SUBTEXT = "#93A0B4";
+// Colors are CSS variables so the theme can be switched in Settings.
+const BG = "var(--wb-bg)"; // background
+const PANEL = "var(--wb-panel)"; // card / panel surface
+const PANEL_LINE = "var(--wb-line)";
+const AMBER = "var(--wb-accent)"; // button / accent color
+const AMBER_SOFT = "var(--wb-accent-soft)";
+const ON_ACCENT = "var(--wb-on-accent)"; // text on accent-colored buttons
+const SIDEBAR = "var(--wb-sidebar)";
+const TEXT = "var(--wb-text)";
+const SUBTEXT = "var(--wb-subtext)";
 const DANGER = "#E3796B";
 const DONE = "#6EE7C9";
+
+const THEMES = [
+  { key: "navy", name: "Navy & Teal", bg: "#334355", panel: "#3D4E63", line: "#4C5F77", accent: AMBER, onAccent: ON_ACCENT, sidebar: "#28323F", text: "#EDEFF3", subtext: "#93A0B4" },
+  { key: "sage", name: "Sage Green", bg: "#4A5A50", panel: "#566A5E", line: "#6A8074", accent: "#C9D8B6", onAccent: "#34423A", sidebar: "#3B4840", text: "#F0F2EC", subtext: "#A9B8AC" },
+  { key: "dustyrose", name: "Dusty Rose", bg: "#5E4B50", panel: "#6E5A60", line: "#85707A", accent: "#E8C4C4", onAccent: "#4A363C", sidebar: "#4B3B40", text: "#F6EEEE", subtext: "#C2A9AE" },
+  { key: "mistblue", name: "Mist Blue", bg: "#46566A", panel: "#536479", line: "#687C94", accent: "#B7CBE0", onAccent: "#2F3E52", sidebar: "#38465A", text: "#EEF2F6", subtext: "#A3B3C6" },
+  { key: "lavender", name: "Lavender Gray", bg: "#555064", panel: "#645E75", line: "#7A748D", accent: "#CFC6E3", onAccent: "#3E3950", sidebar: "#444051", text: "#F1EFF5", subtext: "#B3ADC4" },
+  { key: "clay", name: "Terracotta Clay", bg: "#5F4F48", panel: "#6F5D55", line: "#86726A", accent: "#E3B9A0", onAccent: "#4B3A33", sidebar: "#4B3E38", text: "#F6F0EC", subtext: "#C4AFA4" },
+  { key: "oat", name: "Oat & Mocha", bg: "#57504A", panel: "#675F58", line: "#7F766E", accent: "#E4D5BC", onAccent: "#443D36", sidebar: "#463F3A", text: "#F5F1EA", subtext: "#BFB5A8" },
+  { key: "slate", name: "Smoky Slate", bg: "#3F4448", panel: "#4B5156", line: "#5F676D", accent: "#B8C4C0", onAccent: "#2C3135", sidebar: "#31353A", text: "#EDEFEF", subtext: "#9BA5A8" },
+];
+const THEME_KEY = "workbench-theme";
+
+function applyTheme(key) {
+  const t = THEMES.find((x) => x.key === key) || THEMES[0];
+  const root = document.documentElement;
+  const set = (k, v) => root.style.setProperty(k, v);
+  set("--wb-bg", t.bg);
+  set("--wb-panel", t.panel);
+  set("--wb-line", t.line);
+  set("--wb-accent", t.accent);
+  const n = parseInt(t.accent.slice(1), 16);
+  set("--wb-accent-soft", `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, 0.16)`);
+  set("--wb-on-accent", t.onAccent);
+  set("--wb-sidebar", t.sidebar);
+  set("--wb-text", t.text);
+  set("--wb-subtext", t.subtext);
+  document.body.style.backgroundColor = t.bg;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", t.bg);
+}
+function savedThemeKey() {
+  try {
+    return localStorage.getItem(THEME_KEY) || "navy";
+  } catch {
+    return "navy"
+  }
+}
+applyTheme(savedThemeKey());
 
 const FONT = '"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif';
 
@@ -41,6 +84,7 @@ const NAV_ITEMS = [
   { key: "meetings", label: "Meetings", icon: Users },
   { key: "contacts", label: "Contacts", icon: Contact },
   { key: "je", label: "JE Tracker", icon: FileSpreadsheet },
+  { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
 const STORE_KEYS = {
@@ -55,14 +99,14 @@ const STORE_KEYS = {
 
 const TASK_STATUS = {
   todo: { label: "Not Started", color: "#93A0B4" },
-  doing: { label: "In Progress", color: "#66FCFC" },
+  doing: { label: "In Progress", color: AMBER },
   done: { label: "Done", color: "#6EE7C9" },
   stuck: { label: "Stuck", color: "#E3796B" },
 };
 
 const COMM_STATUS = {
   tobesend: { label: "To Be Sent", color: "#93A0B4" },
-  waiting: { label: "Waiting Reply", color: "#66FCFC" },
+  waiting: { label: "Waiting Reply", color: AMBER },
   pending: { label: "Pending", color: "#E3796B" },
   done: { label: "Done", color: "#6EE7C9" },
 };
@@ -145,7 +189,7 @@ function PrimaryButton({ onClick, children }) {
   return (
     <button
       onClick={onClick}
-      style={{ backgroundColor: AMBER, color: "#344356" }}
+      style={{ backgroundColor: AMBER, color: ON_ACCENT }}
       className="flex items-center gap-1.5 text-sm font-semibold rounded-full px-4 py-1.5 hover:brightness-110 transition-all"
     >
       {children}
@@ -807,7 +851,7 @@ function NotesView({ notes, setNotes }) {
 // ---------------------------------------------------------------------------
 const ENTRY_STATUS = {
   uploading: { label: "Uploading", color: "#93A0B4" },
-  validating: { label: "Validating", color: "#66FCFC" },
+  validating: { label: "Validating", color: AMBER },
   revising: { label: "Revising", color: "#E3796B" },
   pendingapproval: { label: "Pending Approval", color: "#F2C94C" },
   approved: { label: "Approved", color: "#6EE7C9" },
@@ -928,7 +972,7 @@ function JeTrackerView({ entries, setEntries }) {
               className="text-sm rounded-md border px-2 py-1.5 outline-none"
             >
               {Object.entries(ENTRY_STATUS).map(([k, v]) => (
-                <option key={k} value={k} style={{ color: "#344356" }}>{v.label}</option>
+                <option key={k} value={k} style={{ color: ON_ACCENT }}>{v.label}</option>
               ))}
             </select>
           </label>
@@ -955,7 +999,7 @@ function JeTrackerView({ entries, setEntries }) {
               onClick={() => setFilter(k)}
               style={{
                 backgroundColor: active ? AMBER : "transparent",
-                color: active ? "#344356" : SUBTEXT,
+                color: active ? ON_ACCENT : SUBTEXT,
                 borderColor: active ? AMBER : PANEL_LINE,
               }}
               className="text-xs font-semibold rounded-full border px-3 py-1"
@@ -984,8 +1028,9 @@ function JeTrackerView({ entries, setEntries }) {
             <div
               key={e.id}
               style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }}
-              className="rounded-lg border p-3 grid grid-cols-2 md:grid-cols-[130px_170px_170px_1fr_20px] gap-3 items-start"
+              className="rounded-lg border p-3"
             >
+              <div className="grid grid-cols-2 md:grid-cols-[130px_170px_170px_1fr_20px] gap-3 items-start">
               <input
                 list="entity-list"
                 value={e.entity}
@@ -1001,7 +1046,7 @@ function JeTrackerView({ entries, setEntries }) {
                 style={inputStyle}
                 className="w-full text-sm rounded-md border px-2.5 py-1.5 outline-none font-mono"
               />
-              <div className="flex flex-col gap-2">
+              <div>
                 <select
                 value={e.status}
                 onChange={(ev) => update(e.id, { status: ev.target.value })}
@@ -1009,23 +1054,9 @@ function JeTrackerView({ entries, setEntries }) {
                 className="w-full text-sm font-semibold rounded-md border px-2 py-1.5 outline-none"
               >
                 {Object.entries(ENTRY_STATUS).map(([k, v]) => (
-                  <option key={k} value={k} style={{ color: "#344356" }}>{v.label}</option>
+                  <option key={k} value={k} style={{ color: ON_ACCENT }}>{v.label}</option>
                 ))}
               </select>
-                {e.status === "approved" && (
-                  <div
-                    style={{
-                      color: "#EF4444",
-                      border: "3px solid #EF4444",
-                      boxShadow: `inset 0 0 0 2px ${BG}, inset 0 0 0 3.5px #EF4444`,
-                      transform: "rotate(-6deg)",
-                      letterSpacing: "0.12em",
-                    }}
-                    className="self-center rounded-md px-4 py-1.5 text-3xl font-black uppercase select-none opacity-90"
-                  >
-                    Approved
-                  </div>
-                )}
               </div>
               <div className="col-span-2 md:col-span-1 order-last md:order-none">
                 <AutoTextArea value={e.note || ""} onChange={(v) => update(e.id, { note: v })} placeholder="Note…" />
@@ -1035,10 +1066,66 @@ function JeTrackerView({ entries, setEntries }) {
                   <Trash2 size={15} />
                 </IconBtn>
               </div>
+              </div>
+              {e.status === "approved" && (
+                <div className="flex justify-end mt-3 pr-2 pb-1">
+                  <div
+                    style={{
+                      color: "#EF4444",
+                      border: "3px solid #EF4444",
+                      boxShadow: `inset 0 0 0 2px ${PANEL}, inset 0 0 0 3.5px #EF4444`,
+                      transform: "rotate(-6deg)",
+                      letterSpacing: "0.12em",
+                    }}
+                    className="rounded-md px-4 py-1.5 text-3xl font-black uppercase select-none opacity-90"
+                  >
+                    Approved
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Settings (theme colors)
+// ---------------------------------------------------------------------------
+function SettingsView({ themeKey, setThemeKey }) {
+  return (
+    <div>
+      <SectionHeader title="Settings" subtitle="Choose a color theme — saved on this device" />
+      <div style={{ color: TEXT }} className="text-sm font-bold mb-3">Color Theme</div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {THEMES.map((t) => {
+          const active = themeKey === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setThemeKey(t.key)}
+              style={{
+                backgroundColor: t.bg,
+                borderColor: active ? t.accent : t.line,
+                borderWidth: active ? 2 : 1,
+              }}
+              className="rounded-xl border text-left p-3 hover:brightness-110 transition-all"
+            >
+              <div className="flex gap-1.5 mb-3">
+                <span style={{ backgroundColor: t.sidebar, borderColor: t.line }} className="w-6 h-6 rounded border" />
+                <span style={{ backgroundColor: t.panel, borderColor: t.line }} className="w-6 h-6 rounded border" />
+                <span style={{ backgroundColor: t.accent }} className="w-6 h-6 rounded" />
+              </div>
+              <div style={{ color: t.text }} className="text-sm font-semibold flex items-center justify-between">
+                {t.name}
+                {active && <CheckCircle2 size={15} color={t.accent} />}
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1175,6 +1262,14 @@ function DashboardView({ meetings, todos, tasks, comms, entries, contacts, notes
 // ---------------------------------------------------------------------------
 export default function PersonalWorkbench() {
   const [tab, setTab] = useState("dashboard");
+  const [themeKey, setThemeKeyState] = useState(savedThemeKey);
+  const setThemeKey = (k) => {
+    setThemeKeyState(k);
+    applyTheme(k);
+    try {
+      localStorage.setItem(THEME_KEY, k);
+    } catch {}
+  };
   const [loaded, setLoaded] = useState(false);
   const [meetings, setMeetings] = useState([]);
   const [todos, setTodos] = useState([]);
@@ -1241,7 +1336,7 @@ export default function PersonalWorkbench() {
   return (
     <div style={{ backgroundColor: BG, fontFamily: FONT, minHeight: "100vh" }} className="w-full flex flex-col sm:flex-row">
       {/* Sidebar */}
-      <div style={{ backgroundColor: "#28323F", borderColor: PANEL_LINE }} className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r flex sm:flex-col">
+      <div style={{ backgroundColor: SIDEBAR, borderColor: PANEL_LINE }} className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r flex sm:flex-col">
         <div className="px-4 py-4 hidden sm:block">
           <div style={{ color: TEXT }} className="font-bold text-base">Personal Workbench</div>
           <div style={{ color: SUBTEXT }} className="text-[11px] mt-0.5">Your daily desk</div>
@@ -1266,7 +1361,7 @@ export default function PersonalWorkbench() {
                 <Icon size={16} />
                 {item.label}
                 {item.key === "todos" && openTodoCount > 0 && (
-                  <span style={{ backgroundColor: AMBER, color: "#344356" }} className="text-[10px] font-bold rounded-full px-1.5 py-0.5 ml-auto">
+                  <span style={{ backgroundColor: AMBER, color: ON_ACCENT }} className="text-[10px] font-bold rounded-full px-1.5 py-0.5 ml-auto">
                     {openTodoCount}
                   </span>
                 )}
@@ -1296,6 +1391,7 @@ export default function PersonalWorkbench() {
         {tab === "comms" && <CommsView comms={comms} setComms={setComms} />}
         {tab === "contacts" && <ContactsView contacts={contacts} setContacts={setContacts} />}
         {tab === "notes" && <NotesView notes={notes} setNotes={setNotes} />}
+        {tab === "settings" && <SettingsView themeKey={themeKey} setThemeKey={setThemeKey} />}
         {tab === "je" && <JeTrackerView entries={entries} setEntries={setEntries} />}
       </div>
     </div>
