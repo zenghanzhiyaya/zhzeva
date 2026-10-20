@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   LayoutGrid,
   Users,
@@ -15,6 +15,8 @@ import {
   Contact,
   FileSpreadsheet,
   Settings as SettingsIcon,
+  Pencil,
+  Check,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -35,14 +37,14 @@ const DANGER = "#E3796B";
 const DONE = "#6EE7C9";
 
 const THEMES = [
-  { key: "navy", name: "Navy & Teal", bg: "#334355", panel: "#3D4E63", line: "#4C5F77", accent: AMBER, onAccent: ON_ACCENT, sidebar: "#28323F", text: "#EDEFF3", subtext: "#93A0B4" },
-  { key: "sage", name: "Sage Green", bg: "#4A5A50", panel: "#566A5E", line: "#6A8074", accent: "#C9D8B6", onAccent: "#34423A", sidebar: "#3B4840", text: "#F0F2EC", subtext: "#A9B8AC" },
-  { key: "dustyrose", name: "Dusty Rose", bg: "#5E4B50", panel: "#6E5A60", line: "#85707A", accent: "#E8C4C4", onAccent: "#4A363C", sidebar: "#4B3B40", text: "#F6EEEE", subtext: "#C2A9AE" },
-  { key: "mistblue", name: "Mist Blue", bg: "#46566A", panel: "#536479", line: "#687C94", accent: "#B7CBE0", onAccent: "#2F3E52", sidebar: "#38465A", text: "#EEF2F6", subtext: "#A3B3C6" },
-  { key: "lavender", name: "Lavender Gray", bg: "#555064", panel: "#645E75", line: "#7A748D", accent: "#CFC6E3", onAccent: "#3E3950", sidebar: "#444051", text: "#F1EFF5", subtext: "#B3ADC4" },
-  { key: "clay", name: "Terracotta Clay", bg: "#5F4F48", panel: "#6F5D55", line: "#86726A", accent: "#E3B9A0", onAccent: "#4B3A33", sidebar: "#4B3E38", text: "#F6F0EC", subtext: "#C4AFA4" },
-  { key: "oat", name: "Oat & Mocha", bg: "#57504A", panel: "#675F58", line: "#7F766E", accent: "#E4D5BC", onAccent: "#443D36", sidebar: "#463F3A", text: "#F5F1EA", subtext: "#BFB5A8" },
-  { key: "slate", name: "Smoky Slate", bg: "#3F4448", panel: "#4B5156", line: "#5F676D", accent: "#B8C4C0", onAccent: "#2C3135", sidebar: "#31353A", text: "#EDEFEF", subtext: "#9BA5A8" },
+  { key: "navy", name: "Navy & Teal", bg: "#334355", panel: "#3D4E63", line: "#4C5F77", accent: "#66FCFC", onAccent: "#344356", sidebar: "#28323F", text: "#FFFFFF", subtext: "#B3BCCA" },
+  { key: "sage", name: "Sage Green", bg: "#4A5A50", panel: "#566A5E", line: "#6A8074", accent: "#C9D8B6", onAccent: "#34423A", sidebar: "#3B4840", text: "#FFFFFF", subtext: "#C3CDC5" },
+  { key: "dustyrose", name: "Dusty Rose", bg: "#5E4B50", panel: "#6E5A60", line: "#85707A", accent: "#E8C4C4", onAccent: "#4A363C", sidebar: "#4B3B40", text: "#FFFFFF", subtext: "#D4C3C6" },
+  { key: "mistblue", name: "Mist Blue", bg: "#46566A", panel: "#536479", line: "#687C94", accent: "#B7CBE0", onAccent: "#2F3E52", sidebar: "#38465A", text: "#FFFFFF", subtext: "#BFCAD7" },
+  { key: "lavender", name: "Lavender Gray", bg: "#555064", panel: "#645E75", line: "#7A748D", accent: "#CFC6E3", onAccent: "#3E3950", sidebar: "#444051", text: "#FFFFFF", subtext: "#CAC6D6" },
+  { key: "clay", name: "Terracotta Clay", bg: "#5F4F48", panel: "#6F5D55", line: "#86726A", accent: "#E3B9A0", onAccent: "#4B3A33", sidebar: "#4B3E38", text: "#FFFFFF", subtext: "#D6C7BF" },
+  { key: "oat", name: "Oat & Mocha", bg: "#57504A", panel: "#675F58", line: "#7F766E", accent: "#E4D5BC", onAccent: "#443D36", sidebar: "#463F3A", text: "#FFFFFF", subtext: "#D2CBC2" },
+  { key: "slate", name: "Smoky Slate", bg: "#3F4448", panel: "#4B5156", line: "#5F676D", accent: "#B8C4C0", onAccent: "#2C3135", sidebar: "#31353A", text: "#FFFFFF", subtext: "#B9C0C2" },
 ];
 const THEME_KEY = "workbench-theme";
 
@@ -98,17 +100,17 @@ const STORE_KEYS = {
 };
 
 const TASK_STATUS = {
-  todo: { label: "Not Started", color: "#93A0B4" },
-  doing: { label: "In Progress", color: AMBER },
-  done: { label: "Done", color: "#6EE7C9" },
-  stuck: { label: "Stuck", color: "#E3796B" },
+  todo: { label: "Not Started", color: "#A8B3C7" },
+  doing: { label: "In Progress", color: "#4FC3F7" },
+  done: { label: "Done", color: "#4ADE80" },
+  stuck: { label: "Stuck", color: "#F87171" },
 };
 
 const COMM_STATUS = {
-  tobesend: { label: "To Be Sent", color: "#93A0B4" },
-  waiting: { label: "Waiting Reply", color: AMBER },
-  pending: { label: "Pending", color: "#E3796B" },
-  done: { label: "Done", color: "#6EE7C9" },
+  tobesend: { label: "To Be Sent", color: "#C4A7F5" },
+  waiting: { label: "Waiting Reply", color: "#FBBF24" },
+  pending: { label: "Pending", color: "#FB923C" },
+  done: { label: "Done", color: "#4ADE80" },
 };
 
 function uid(prefix) {
@@ -135,19 +137,80 @@ function todayStr() {
 // ---------------------------------------------------------------------------
 // Small shared pieces
 // ---------------------------------------------------------------------------
+const LockCtx = createContext(false);
+const OPT_STYLE = { color: "#111111", backgroundColor: "#FFFFFF" };
+const badgeStyle = (c) => ({ color: c, borderColor: c, backgroundColor: c + "30" });
+const lockedStyle = (locked) =>
+  locked
+    ? { borderColor: "transparent", backgroundColor: "transparent", color: TEXT }
+    : { borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" };
+
+// Text input that turns into plain text while its card is locked.
+function LockInput({ className = "", style, onFocus, onBlur, ...props }) {
+  const locked = useContext(LockCtx);
+  if (locked && props.type === "date") {
+    return (
+      <div style={{ ...lockedStyle(true), ...style }} className={className + " border"}>
+        {props.value || "—"}
+      </div>
+    );
+  }
+  return (
+    <input
+      {...props}
+      readOnly={locked}
+      tabIndex={locked ? -1 : undefined}
+      onFocus={locked ? undefined : onFocus}
+      onBlur={locked ? undefined : onBlur}
+      style={{ ...lockedStyle(locked), ...style }}
+      className={className + " outline-none" + (locked ? " cursor-default" : "")}
+    />
+  );
+}
+
+function EditToggle({ editing, onClick }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      style={editing ? { backgroundColor: AMBER, color: ON_ACCENT, borderColor: AMBER } : { color: AMBER, borderColor: AMBER }}
+      className="flex items-center gap-1 text-xs font-semibold rounded-full border px-3 py-1 hover:brightness-110 transition-all"
+    >
+      {editing ? <Check size={13} /> : <Pencil size={12} />}
+      {editing ? "Done" : "Edit"}
+    </button>
+  );
+}
+
+// Wraps an expanded card body: everything inside is read-only until "Edit" is clicked.
+function EditPanel({ initialEditing, className, children }) {
+  const [editing, setEditing] = useState(!!initialEditing);
+  return (
+    <LockCtx.Provider value={!editing}>
+      <div className={className}>
+        <div className="flex justify-end">
+          <EditToggle editing={editing} onClick={() => setEditing((v) => !v)} />
+        </div>
+        {children}
+      </div>
+    </LockCtx.Provider>
+  );
+}
+
 function Field({ label, value, onChange, placeholder, type = "text", className = "" }) {
   return (
     <label className={`flex flex-col gap-1 ${className}`}>
       <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">
         {label}
       </span>
-      <input
+      <LockInput
         type={type}
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
-        style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" }}
-        className="text-sm rounded-md border px-2.5 py-1.5 outline-none focus:border-2"
+        className="text-sm rounded-md border px-2.5 py-1.5 min-h-[34px]"
         onFocus={(e) => (e.target.style.borderColor = AMBER)}
         onBlur={(e) => (e.target.style.borderColor = PANEL_LINE)}
       />
@@ -157,19 +220,12 @@ function Field({ label, value, onChange, placeholder, type = "text", className =
 
 function TextAreaField({ label, value, onChange, placeholder, rows = 3 }) {
   return (
-    <label className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1">
       <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">
         {label}
       </span>
-      <textarea
-        value={value}
-        placeholder={placeholder}
-        rows={rows}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" }}
-        className="text-sm rounded-md border px-2.5 py-1.5 outline-none resize-none"
-      />
-    </label>
+      <AutoTextArea value={value} onChange={onChange} placeholder={placeholder} minHeight={`${rows * 24 + 12}px`} />
+    </div>
   );
 }
 
@@ -291,7 +347,7 @@ function MeetingsView({ meetings, setMeetings }) {
               </IconBtn>
             </div>
             {m.open && (
-              <div className="px-4 pb-4 flex flex-col gap-3">
+              <EditPanel initialEditing={!m.title} className="px-4 pb-4 flex flex-col gap-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Field label="Meeting Title" value={m.title} onChange={(v) => update(m.id, { title: v })} placeholder="e.g. Quarterly business review" />
                   <Field label="Date" type="date" value={m.date} onChange={(v) => update(m.id, { date: v })} />
@@ -317,7 +373,7 @@ function MeetingsView({ meetings, setMeetings }) {
                         <button onClick={() => updateAction(m.id, a.id, { done: !a.done })}>
                           {a.done ? <CheckCircle2 size={16} color={DONE} /> : <Circle size={16} color={SUBTEXT} />}
                         </button>
-                        <input
+                        <LockInput
                           value={a.text}
                           onChange={(e) => updateAction(m.id, a.id, { text: e.target.value })}
                           placeholder="Action item"
@@ -325,8 +381,9 @@ function MeetingsView({ meetings, setMeetings }) {
                             color: a.done ? SUBTEXT : TEXT,
                             textDecoration: a.done ? "line-through" : "none",
                             borderColor: "transparent",
+                            backgroundColor: "transparent",
                           }}
-                          className="flex-1 bg-transparent text-sm outline-none border-b focus:border-b"
+                          className="flex-1 min-w-0 text-sm border-b focus:border-b"
                           onFocus={(e) => (e.target.style.borderColor = PANEL_LINE)}
                           onBlur={(e) => (e.target.style.borderColor = "transparent")}
                         />
@@ -337,7 +394,7 @@ function MeetingsView({ meetings, setMeetings }) {
                     ))}
                   </div>
                 </div>
-              </div>
+              </EditPanel>
             )}
           </div>
         ))}
@@ -349,7 +406,50 @@ function MeetingsView({ meetings, setMeetings }) {
 // ---------------------------------------------------------------------------
 // To-do list
 // ---------------------------------------------------------------------------
-const PRIORITIES = { high: { label: "High", color: DANGER }, medium: { label: "Medium", color: AMBER }, low: { label: "Low", color: SUBTEXT } };
+const PRIORITIES = { high: { label: "High", color: "#F87171" }, medium: { label: "Medium", color: "#FBBF24" }, low: { label: "Low", color: "#60A5FA" } };
+
+function TodoRow({ t, setTodos, toggle, remove }) {
+  const [editing, setEditing] = useState(false);
+  const patch = (p) => setTodos((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...p } : x)));
+  return (
+    <LockCtx.Provider value={!editing}>
+      <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-md px-3 py-2 flex items-center gap-3">
+        <button onClick={() => toggle(t.id)}>
+          {t.done ? <CheckCircle2 size={18} color={DONE} /> : <Circle size={18} color={SUBTEXT} />}
+        </button>
+        <LockInput
+          value={t.text}
+          onChange={(e) => patch({ text: e.target.value })}
+          style={{ color: t.done ? SUBTEXT : TEXT, textDecoration: t.done ? "line-through" : "none" }}
+          className="flex-1 min-w-0 text-sm rounded-md border px-2 py-1"
+        />
+        <LockInput
+          type="date"
+          value={t.due || ""}
+          onChange={(e) => patch({ due: e.target.value })}
+          style={{ color: SUBTEXT }}
+          className="text-xs shrink-0 rounded-md border px-2 py-1"
+        />
+        <select
+          value={t.priority}
+          onChange={(e) => patch({ priority: e.target.value })}
+          style={badgeStyle(PRIORITIES[t.priority].color)}
+          className="text-[11px] font-bold border rounded px-1.5 py-0.5 shrink-0 outline-none"
+        >
+          {Object.entries(PRIORITIES).map(([key, p]) => (
+            <option key={key} value={key} style={OPT_STYLE}>{p.label}</option>
+          ))}
+        </select>
+        <IconBtn onClick={() => setEditing((v) => !v)}>
+          {editing ? <Check size={16} color={AMBER} /> : <Pencil size={15} />}
+        </IconBtn>
+        <IconBtn danger onClick={() => remove(t.id)}>
+          <Trash2 size={15} />
+        </IconBtn>
+      </div>
+    </LockCtx.Provider>
+  );
+}
 
 function TodosView({ todos, setTodos }) {
   const [draft, setDraft] = useState("");
@@ -399,9 +499,9 @@ function TodosView({ todos, setTodos }) {
           style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" }}
           className="text-sm rounded-md border px-2.5 py-1.5 outline-none"
         >
-          <option value="high">High priority</option>
-          <option value="medium">Medium priority</option>
-          <option value="low">Low priority</option>
+          <option value="high" style={OPT_STYLE}>High priority</option>
+          <option value="medium" style={OPT_STYLE}>Medium priority</option>
+          <option value="low" style={OPT_STYLE}>Low priority</option>
         </select>
         <PrimaryButton onClick={add}>
           <Plus size={15} /> Add
@@ -432,37 +532,7 @@ function TodosView({ todos, setTodos }) {
       {sorted.length === 0 && <EmptyState text="Nothing here yet." />}
       <div className="flex flex-col gap-1.5">
         {sorted.map((t) => (
-          <div key={t.id} style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-md px-3 py-2 flex items-center gap-3">
-            <button onClick={() => toggle(t.id)}>
-              {t.done ? <CheckCircle2 size={18} color={DONE} /> : <Circle size={18} color={SUBTEXT} />}
-            </button>
-            <input
-              value={t.text}
-              onChange={(e) => setTodos((prev) => prev.map((x) => (x.id === t.id ? { ...x, text: e.target.value } : x)))}
-              style={{ color: t.done ? SUBTEXT : TEXT, textDecoration: t.done ? "line-through" : "none", backgroundColor: "transparent" }}
-              className="flex-1 min-w-0 text-sm outline-none border-b border-transparent focus:border-current"
-            />
-            <input
-              type="date"
-              value={t.due || ""}
-              onChange={(e) => setTodos((prev) => prev.map((x) => (x.id === t.id ? { ...x, due: e.target.value } : x)))}
-              style={{ color: SUBTEXT, borderColor: PANEL_LINE, backgroundColor: "rgba(0,0,0,0.15)" }}
-              className="text-xs shrink-0 rounded border px-1.5 py-0.5 outline-none"
-            />
-            <select
-              value={t.priority}
-              onChange={(e) => setTodos((prev) => prev.map((x) => (x.id === t.id ? { ...x, priority: e.target.value } : x)))}
-              style={{ color: PRIORITIES[t.priority].color, borderColor: PRIORITIES[t.priority].color, backgroundColor: "transparent" }}
-              className="text-[10px] font-bold border rounded px-1.5 py-0.5 shrink-0 outline-none"
-            >
-              {Object.entries(PRIORITIES).map(([key, p]) => (
-                <option key={key} value={key} style={{ color: "#000" }}>{p.label}</option>
-              ))}
-            </select>
-            <IconBtn danger onClick={() => remove(t.id)}>
-              <Trash2 size={15} />
-            </IconBtn>
-          </div>
+          <TodoRow key={t.id} t={t} setTodos={setTodos} toggle={toggle} remove={remove} />
         ))}
       </div>
     </div>
@@ -565,7 +635,7 @@ function TasksView({ tasks, setTasks }) {
                       </span>
                     )}
                     <span
-                      style={{ color: TASK_STATUS[t.status].color, borderColor: TASK_STATUS[t.status].color }}
+                      style={badgeStyle(TASK_STATUS[t.status].color)}
                       className="text-[10px] font-bold border rounded px-1.5 py-0.5 shrink-0"
                     >
                       {TASK_STATUS[t.status].label}
@@ -575,7 +645,7 @@ function TasksView({ tasks, setTasks }) {
                     </IconBtn>
                   </div>
                   {t.open && (
-                    <div className="px-4 pb-4 flex flex-col gap-3">
+                    <EditPanel initialEditing={!t.title} className="px-4 pb-4 flex flex-col gap-3">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field label="Task Name" value={t.title} onChange={(v) => update(t.id, { title: v })} placeholder="e.g. Finish requirements doc" />
                         <Field label="Project" value={t.project} onChange={(v) => update(t.id, { project: v })} placeholder="e.g. Website redesign" />
@@ -586,11 +656,11 @@ function TasksView({ tasks, setTasks }) {
                           <select
                             value={t.status}
                             onChange={(e) => update(t.id, { status: e.target.value })}
-                            style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" }}
-                            className="text-sm rounded-md border px-2.5 py-1.5 outline-none"
+                            style={badgeStyle(TASK_STATUS[t.status].color)}
+                            className="text-sm font-semibold rounded-md border px-2.5 py-1.5 outline-none"
                           >
                             {Object.entries(TASK_STATUS).map(([key, s]) => (
-                              <option key={key} value={key}>{s.label}</option>
+                              <option key={key} value={key} style={OPT_STYLE}>{s.label}</option>
                             ))}
                           </select>
                         </label>
@@ -598,7 +668,7 @@ function TasksView({ tasks, setTasks }) {
                         <Field label="Due Date" type="date" value={t.due} onChange={(v) => update(t.id, { due: v })} />
                       </div>
                       <TextAreaField label="Notes" value={t.notes} onChange={(v) => update(t.id, { notes: v })} placeholder="Progress, blockers, next steps…" rows={3} />
-                    </div>
+                    </EditPanel>
                   )}
                 </div>
               ))}
@@ -663,7 +733,7 @@ function CommsView({ comms, setComms }) {
           className="text-sm rounded-md border px-2.5 py-1.5 outline-none"
         >
           {Object.entries(COMM_STATUS).map(([key, s]) => (
-            <option key={key} value={key}>{s.label}</option>
+            <option key={key} value={key} style={OPT_STYLE}>{s.label}</option>
           ))}
         </select>
         <PrimaryButton onClick={add}>
@@ -714,11 +784,11 @@ function CommsView({ comms, setComms }) {
                 value={c.status}
                 onClick={(e) => e.stopPropagation()}
                 onChange={(e) => update(c.id, { status: e.target.value })}
-                style={{ color: COMM_STATUS[c.status].color, borderColor: COMM_STATUS[c.status].color, backgroundColor: "transparent" }}
+                style={badgeStyle(COMM_STATUS[c.status].color)}
                 className="text-[10px] font-bold border rounded px-1.5 py-0.5 shrink-0 outline-none"
               >
                 {Object.entries(COMM_STATUS).map(([key, s]) => (
-                  <option key={key} value={key} style={{ color: "#000" }}>{s.label}</option>
+                  <option key={key} value={key} style={OPT_STYLE}>{s.label}</option>
                 ))}
               </select>
               <IconBtn danger onClick={(e) => { e.stopPropagation(); remove(c.id); }}>
@@ -726,13 +796,13 @@ function CommsView({ comms, setComms }) {
               </IconBtn>
             </div>
             {c.open && (
-              <div className="px-3 pb-3 flex flex-col gap-3">
+              <EditPanel initialEditing={!c.subject} className="px-3 pb-3 flex flex-col gap-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Subject" value={c.subject} onChange={(v) => update(c.id, { subject: v })} placeholder="What's this about" />
                   <Field label="Contact" value={c.contact} onChange={(v) => update(c.id, { contact: v })} placeholder="Who this involves" />
                 </div>
                 <TextAreaField label="Notes" value={c.notes} onChange={(v) => update(c.id, { notes: v })} placeholder="What was said, what's needed next…" rows={3} />
-              </div>
+              </EditPanel>
             )}
           </div>
         ))}
@@ -783,14 +853,14 @@ function ContactsView({ contacts, setContacts }) {
               </IconBtn>
             </div>
             {c.open && (
-              <div className="px-4 pb-4 flex flex-col gap-3">
+              <EditPanel initialEditing={!c.name} className="px-4 pb-4 flex flex-col gap-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Field label="Name" value={c.name} onChange={(v) => update(c.id, { name: v })} placeholder="e.g. Alex Chen" />
                   <Field label="Role / Org" value={c.role} onChange={(v) => update(c.id, { role: v })} placeholder="e.g. Vendor — Sales Manager" />
                   <Field label="Contact Info" value={c.contactInfo} onChange={(v) => update(c.id, { contactInfo: v })} placeholder="Phone / email / IM" />
                 </div>
                 <TextAreaField label="Notes" value={c.notes} onChange={(v) => update(c.id, { notes: v })} placeholder="What they own, things to watch for, past history…" rows={3} />
-              </div>
+              </EditPanel>
             )}
           </div>
         ))}
@@ -802,6 +872,34 @@ function ContactsView({ contacts, setContacts }) {
 // ---------------------------------------------------------------------------
 // Quick notes ("etc." catch-all)
 // ---------------------------------------------------------------------------
+function NoteRow({ n, setNotes, remove }) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <LockCtx.Provider value={!editing}>
+      <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-md px-3 py-2 flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <AutoTextArea
+            value={n.text}
+            onChange={(v) => setNotes((prev) => prev.map((x) => (x.id === n.id ? { ...x, text: v } : x)))}
+            placeholder="Note…"
+          />
+        </div>
+        <span style={{ color: SUBTEXT }} className="text-[11px] shrink-0 pt-1.5">
+          {new Date(n.createdAt).toLocaleDateString("zh-CN")}
+        </span>
+        <div className="pt-1.5 flex gap-3">
+          <IconBtn onClick={() => setEditing((v) => !v)}>
+            {editing ? <Check size={16} color={AMBER} /> : <Pencil size={15} />}
+          </IconBtn>
+          <IconBtn danger onClick={() => remove(n.id)}>
+            <Trash2 size={15} />
+          </IconBtn>
+        </div>
+      </div>
+    </LockCtx.Provider>
+  );
+}
+
 function NotesView({ notes, setNotes }) {
   const [draft, setDraft] = useState("");
   const add = () => {
@@ -831,15 +929,7 @@ function NotesView({ notes, setNotes }) {
       {notes.length === 0 && <EmptyState text="No quick notes yet." />}
       <div className="flex flex-col gap-2">
         {notes.map((n) => (
-          <div key={n.id} style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-md px-3 py-2 flex items-start gap-3">
-            <span style={{ color: TEXT }} className="flex-1 text-sm whitespace-pre-wrap">{n.text}</span>
-            <span style={{ color: SUBTEXT }} className="text-[11px] shrink-0">
-              {new Date(n.createdAt).toLocaleDateString("zh-CN")}
-            </span>
-            <IconBtn danger onClick={() => remove(n.id)}>
-              <Trash2 size={15} />
-            </IconBtn>
-          </div>
+          <NoteRow key={n.id} n={n} setNotes={setNotes} remove={remove} />
         ))}
       </div>
     </div>
@@ -850,14 +940,15 @@ function NotesView({ notes, setNotes }) {
 // Entries (journal entries uploaded)
 // ---------------------------------------------------------------------------
 const ENTRY_STATUS = {
-  uploading: { label: "Uploading", color: "#93A0B4" },
-  validating: { label: "Validating", color: AMBER },
-  revising: { label: "Revising", color: "#E3796B" },
-  pendingapproval: { label: "Pending Approval", color: "#F2C94C" },
-  approved: { label: "Approved", color: "#6EE7C9" },
+  uploading: { label: "Uploading", color: "#A8B3C7" },
+  validating: { label: "Validating", color: "#38BDF8" },
+  revising: { label: "Revising", color: "#FB923C" },
+  pendingapproval: { label: "Pending Approval", color: "#FACC15" },
+  approved: { label: "Approved", color: "#4ADE80" },
 };
 
 function AutoTextArea({ value, onChange, placeholder, minHeight }) {
+  const locked = useContext(LockCtx);
   const ref = useRef(null);
   const lastW = useRef(0);
   const fit = () => {
@@ -866,7 +957,7 @@ function AutoTextArea({ value, onChange, placeholder, minHeight }) {
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
   };
-  useEffect(fit, [value]);
+  useEffect(fit, [value, locked]);
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -885,10 +976,76 @@ function AutoTextArea({ value, onChange, placeholder, minHeight }) {
       rows={1}
       value={value}
       placeholder={placeholder}
+      readOnly={locked}
+      tabIndex={locked ? -1 : undefined}
       onChange={(e) => onChange(e.target.value)}
-      style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)", overflow: "hidden", minHeight }}
-      className="w-full text-sm rounded-md border px-2.5 py-1.5 outline-none resize-none"
+      style={{ ...lockedStyle(locked), overflow: "hidden", minHeight: locked ? undefined : minHeight }}
+      className={"w-full text-sm rounded-md border px-2.5 py-1.5 outline-none resize-none" + (locked ? " cursor-default" : "")}
     />
+  );
+}
+
+const entrySel = (st) => ({ ...badgeStyle(ENTRY_STATUS[st]?.color || "#A8B3C7") });
+
+function JeRow({ e, update, remove }) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <LockCtx.Provider value={!editing}>
+      <div style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }} className="rounded-lg border p-3">
+        <div className="grid grid-cols-2 md:grid-cols-[130px_170px_170px_1fr_56px] gap-3 items-start">
+          <LockInput
+            list="entity-list"
+            value={e.entity}
+            onChange={(ev) => update(e.id, { entity: ev.target.value })}
+            placeholder="Entity"
+            className="w-full text-sm rounded-md border px-2.5 py-1.5"
+          />
+          <LockInput
+            value={e.jid}
+            onChange={(ev) => update(e.id, { jid: ev.target.value })}
+            placeholder="Journal ID"
+            className="w-full text-sm rounded-md border px-2.5 py-1.5 font-mono"
+          />
+          <select
+            value={e.status}
+            onChange={(ev) => update(e.id, { status: ev.target.value })}
+            style={entrySel(e.status)}
+            className="w-full text-sm font-semibold rounded-md border px-2 py-1.5 outline-none"
+          >
+            {Object.entries(ENTRY_STATUS).map(([k, v]) => (
+              <option key={k} value={k} style={OPT_STYLE}>{v.label}</option>
+            ))}
+          </select>
+          <div className="col-span-2 md:col-span-1 order-last md:order-none">
+            <AutoTextArea value={e.note || ""} onChange={(v) => update(e.id, { note: v })} placeholder="Note…" />
+          </div>
+          <div className="justify-self-end pt-1.5 flex gap-3">
+            <IconBtn onClick={() => setEditing((v) => !v)}>
+              {editing ? <Check size={16} color={AMBER} /> : <Pencil size={15} />}
+            </IconBtn>
+            <IconBtn onClick={() => remove(e.id)} danger>
+              <Trash2 size={15} />
+            </IconBtn>
+          </div>
+        </div>
+        {e.status === "approved" && (
+          <div className="flex justify-end mt-3 pr-2 pb-1">
+            <div
+              style={{
+                color: "#EF4444",
+                border: "3px solid #EF4444",
+                boxShadow: `inset 0 0 0 2px ${PANEL}, inset 0 0 0 3.5px #EF4444`,
+                transform: "rotate(-6deg)",
+                letterSpacing: "0.12em",
+              }}
+              className="rounded-md px-4 py-1.5 text-3xl font-black uppercase select-none opacity-90"
+            >
+              Approved
+            </div>
+          </div>
+        )}
+      </div>
+    </LockCtx.Provider>
   );
 }
 
@@ -924,11 +1081,7 @@ function JeTrackerView({ entries, setEntries }) {
   const shown = filter === "all" ? entries : entries.filter((e) => e.status === filter);
 
   const inputStyle = { borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" };
-  const selStyle = (s) => ({
-    color: ENTRY_STATUS[s]?.color,
-    borderColor: ENTRY_STATUS[s]?.color,
-    backgroundColor: "rgba(0,0,0,0.2)",
-  });
+  const selStyle = entrySel;
 
   return (
     <div>
@@ -972,7 +1125,7 @@ function JeTrackerView({ entries, setEntries }) {
               className="text-sm rounded-md border px-2 py-1.5 outline-none"
             >
               {Object.entries(ENTRY_STATUS).map(([k, v]) => (
-                <option key={k} value={k} style={{ color: ON_ACCENT }}>{v.label}</option>
+                <option key={k} value={k} style={OPT_STYLE}>{v.label}</option>
               ))}
             </select>
           </label>
@@ -1016,7 +1169,7 @@ function JeTrackerView({ entries, setEntries }) {
         <div className="space-y-2">
           <div
             style={{ color: SUBTEXT }}
-            className="hidden md:grid grid-cols-[130px_170px_170px_1fr_20px] gap-3 px-3 text-[11px] tracking-wide"
+            className="hidden md:grid grid-cols-[130px_170px_170px_1fr_56px] gap-3 px-3 text-[11px] tracking-wide"
           >
             <span>Entity</span>
             <span>Journal ID</span>
@@ -1025,65 +1178,7 @@ function JeTrackerView({ entries, setEntries }) {
             <span></span>
           </div>
           {shown.map((e) => (
-            <div
-              key={e.id}
-              style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }}
-              className="rounded-lg border p-3"
-            >
-              <div className="grid grid-cols-2 md:grid-cols-[130px_170px_170px_1fr_20px] gap-3 items-start">
-              <input
-                list="entity-list"
-                value={e.entity}
-                onChange={(ev) => update(e.id, { entity: ev.target.value })}
-                placeholder="Entity"
-                style={inputStyle}
-                className="w-full text-sm rounded-md border px-2.5 py-1.5 outline-none"
-              />
-              <input
-                value={e.jid}
-                onChange={(ev) => update(e.id, { jid: ev.target.value })}
-                placeholder="Journal ID"
-                style={inputStyle}
-                className="w-full text-sm rounded-md border px-2.5 py-1.5 outline-none font-mono"
-              />
-              <div>
-                <select
-                value={e.status}
-                onChange={(ev) => update(e.id, { status: ev.target.value })}
-                style={selStyle(e.status)}
-                className="w-full text-sm font-semibold rounded-md border px-2 py-1.5 outline-none"
-              >
-                {Object.entries(ENTRY_STATUS).map(([k, v]) => (
-                  <option key={k} value={k} style={{ color: ON_ACCENT }}>{v.label}</option>
-                ))}
-              </select>
-              </div>
-              <div className="col-span-2 md:col-span-1 order-last md:order-none">
-                <AutoTextArea value={e.note || ""} onChange={(v) => update(e.id, { note: v })} placeholder="Note…" />
-              </div>
-              <div className="justify-self-end pt-1.5">
-                <IconBtn onClick={() => remove(e.id)} danger>
-                  <Trash2 size={15} />
-                </IconBtn>
-              </div>
-              </div>
-              {e.status === "approved" && (
-                <div className="flex justify-end mt-3 pr-2 pb-1">
-                  <div
-                    style={{
-                      color: "#EF4444",
-                      border: "3px solid #EF4444",
-                      boxShadow: `inset 0 0 0 2px ${PANEL}, inset 0 0 0 3.5px #EF4444`,
-                      transform: "rotate(-6deg)",
-                      letterSpacing: "0.12em",
-                    }}
-                    className="rounded-md px-4 py-1.5 text-3xl font-black uppercase select-none opacity-90"
-                  >
-                    Approved
-                  </div>
-                </div>
-              )}
-            </div>
+            <JeRow key={e.id} e={e} update={update} remove={remove} />
           ))}
         </div>
       )}
