@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   LayoutGrid,
   Users,
@@ -17,6 +17,7 @@ import {
   Contact,
   ExternalLink,
   ClipboardCheck,
+  FileSpreadsheet,
   Download,
 } from "lucide-react";
 
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
   { key: "trainings", label: "Training Notes", icon: GraduationCap },
   { key: "docs", label: "Docs & Links", icon: LinkIcon },
   { key: "contacts", label: "Contacts", icon: Contact },
+  { key: "entries", label: "Entries", icon: FileSpreadsheet },
   { key: "selfreview", label: "Self-Review Tracker", icon: ClipboardCheck },
 ];
 
@@ -62,6 +64,7 @@ const STORE_KEYS = {
   srBlEntries: "workbench-sr-bl-entries",
   srJeCustom: "workbench-sr-je-custom",
   srBlCustom: "workbench-sr-bl-custom",
+  entries: "workbench-entries",
 };
 
 const TASK_STATUS = {
@@ -72,6 +75,7 @@ const TASK_STATUS = {
 };
 
 const COMM_STATUS = {
+  tobesend: { label: "To Be Sent", color: "#93A0B4" },
   waiting: { label: "Waiting Reply", color: "#66FCFC" },
   pending: { label: "Pending", color: "#E3796B" },
   done: { label: "Done", color: "#6EE7C9" },
@@ -410,12 +414,16 @@ function TodosView({ todos, setTodos }) {
                 {t.due}
               </span>
             )}
-            <span
-              style={{ color: PRIORITIES[t.priority].color, borderColor: PRIORITIES[t.priority].color }}
-              className="text-[10px] font-bold border rounded px-1.5 py-0.5 shrink-0"
+            <select
+              value={t.priority}
+              onChange={(e) => setTodos((prev) => prev.map((x) => (x.id === t.id ? { ...x, priority: e.target.value } : x)))}
+              style={{ color: PRIORITIES[t.priority].color, borderColor: PRIORITIES[t.priority].color, backgroundColor: "transparent" }}
+              className="text-[10px] font-bold border rounded px-1.5 py-0.5 shrink-0 outline-none"
             >
-              {PRIORITIES[t.priority].label}
-            </span>
+              {Object.entries(PRIORITIES).map(([key, p]) => (
+                <option key={key} value={key} style={{ color: "#000" }}>{p.label}</option>
+              ))}
+            </select>
             <IconBtn danger onClick={() => remove(t.id)}>
               <Trash2 size={15} />
             </IconBtn>
@@ -573,14 +581,14 @@ function TasksView({ tasks, setTasks }) {
 function CommsView({ comms, setComms }) {
   const [draftSubject, setDraftSubject] = useState("");
   const [draftContact, setDraftContact] = useState("");
-  const [draftStatus, setDraftStatus] = useState("waiting");
+  const [draftStatus, setDraftStatus] = useState("tobesend");
   const [filter, setFilter] = useState("all");
 
   const add = () => {
     const subject = draftSubject.trim();
     if (!subject) return;
     setComms((prev) => [
-      { id: uid("cm"), subject, contact: draftContact.trim(), status: draftStatus, date: todayStr(), notes: "" },
+      { id: uid("cm"), subject, contact: draftContact.trim(), status: draftStatus, date: todayStr(), notes: "", open: true },
       ...prev,
     ]);
     setDraftSubject("");
@@ -588,6 +596,7 @@ function CommsView({ comms, setComms }) {
   };
   const update = (id, patch) => setComms((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   const remove = (id) => setComms((prev) => prev.filter((c) => c.id !== id));
+  const toggleOpen = (id) => update(id, { open: !comms.find((c) => c.id === id).open });
 
   const visible = filter === "all" ? comms : comms.filter((c) => c.status === filter);
 
@@ -656,27 +665,40 @@ function CommsView({ comms, setComms }) {
       </div>
 
       {visible.length === 0 && <EmptyState text="No follow-ups match this filter." />}
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         {visible.map((c) => (
-          <div key={c.id} style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-md px-3 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2">
-            <div className="flex-1 min-w-0">
-              <div style={{ color: TEXT }} className="text-sm font-medium truncate">{c.subject}</div>
-              {c.contact && <div style={{ color: SUBTEXT }} className="text-xs mt-0.5">{c.contact}</div>}
+          <div key={c.id} style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-lg overflow-hidden">
+            <div onClick={() => toggleOpen(c.id)} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer select-none">
+              {c.open ? <ChevronDown size={16} color={SUBTEXT} /> : <ChevronRight size={16} color={SUBTEXT} />}
+              <div className="flex-1 min-w-0">
+                <div style={{ color: TEXT }} className="text-sm font-medium truncate">{c.subject || "Untitled follow-up"}</div>
+                {c.contact && <div style={{ color: SUBTEXT }} className="text-xs mt-0.5 truncate">{c.contact}</div>}
+              </div>
+              <span style={{ color: SUBTEXT }} className="text-xs shrink-0 hidden sm:block">{c.date}</span>
+              <select
+                value={c.status}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => update(c.id, { status: e.target.value })}
+                style={{ color: COMM_STATUS[c.status].color, borderColor: COMM_STATUS[c.status].color, backgroundColor: "transparent" }}
+                className="text-[10px] font-bold border rounded px-1.5 py-0.5 shrink-0 outline-none"
+              >
+                {Object.entries(COMM_STATUS).map(([key, s]) => (
+                  <option key={key} value={key} style={{ color: "#000" }}>{s.label}</option>
+                ))}
+              </select>
+              <IconBtn danger onClick={(e) => { e.stopPropagation(); remove(c.id); }}>
+                <Trash2 size={15} />
+              </IconBtn>
             </div>
-            <span style={{ color: SUBTEXT }} className="text-xs shrink-0">{c.date}</span>
-            <select
-              value={c.status}
-              onChange={(e) => update(c.id, { status: e.target.value })}
-              style={{ color: COMM_STATUS[c.status].color, borderColor: COMM_STATUS[c.status].color, backgroundColor: "transparent" }}
-              className="text-[11px] font-bold border rounded px-1.5 py-0.5 shrink-0 outline-none"
-            >
-              {Object.entries(COMM_STATUS).map(([key, s]) => (
-                <option key={key} value={key} style={{ color: "#000" }}>{s.label}</option>
-              ))}
-            </select>
-            <IconBtn danger onClick={() => remove(c.id)}>
-              <Trash2 size={15} />
-            </IconBtn>
+            {c.open && (
+              <div className="px-3 pb-3 flex flex-col gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Subject" value={c.subject} onChange={(v) => update(c.id, { subject: v })} placeholder="What's this about" />
+                  <Field label="Contact" value={c.contact} onChange={(v) => update(c.id, { contact: v })} placeholder="Who this involves" />
+                </div>
+                <TextAreaField label="Notes" value={c.notes} onChange={(v) => update(c.id, { notes: v })} placeholder="What was said, what's needed next…" rows={3} />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -1373,6 +1395,230 @@ function SelfReviewView({ srJeEntries, setSrJeEntries, srBlEntries, setSrBlEntri
 }
 
 // ---------------------------------------------------------------------------
+// Entries (journal entries uploaded)
+// ---------------------------------------------------------------------------
+const ENTRY_STATUS = {
+  approved: { label: "Approved", color: "#6EE7C9" },
+  submitted: { label: "Submitted", color: "#93A0B4" },
+  validating: { label: "Validating", color: "#66FCFC" },
+  pending: { label: "Pending Adjustment", color: "#E3796B" },
+};
+
+function AutoTextArea({ value, onChange, placeholder }) {
+  const ref = useRef(null);
+  const lastW = useRef(0);
+  const fit = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  };
+  useEffect(fit, [value]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      if (el.offsetWidth !== lastW.current) {
+        lastW.current = el.offsetWidth;
+        fit();
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)", overflow: "hidden" }}
+      className="w-full text-sm rounded-md border px-2.5 py-1.5 outline-none resize-none"
+    />
+  );
+}
+
+function EntriesView({ entries, setEntries }) {
+  const [entity, setEntity] = useState("");
+  const [jid, setJid] = useState("");
+  const [status, setStatus] = useState("submitted");
+  const [note, setNote] = useState("");
+  const [filter, setFilter] = useState("all");
+
+  const entityOptions = useMemo(
+    () => Array.from(new Set(entries.map((e) => e.entity).filter(Boolean))),
+    [entries]
+  );
+
+  const add = () => {
+    if (!jid.trim()) return;
+    setEntries([
+      { id: uid("en"), entity: entity.trim(), jid: jid.trim(), status, note: note.trim(), createdAt: todayStr() },
+      ...entries,
+    ]);
+    setJid("");
+    setNote("");
+  };
+  const update = (id, patch) => setEntries(entries.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+  const remove = (id) => setEntries(entries.filter((e) => e.id !== id));
+
+  const counts = useMemo(() => {
+    const c = { all: entries.length };
+    Object.keys(ENTRY_STATUS).forEach((k) => (c[k] = entries.filter((e) => e.status === k).length));
+    return c;
+  }, [entries]);
+  const shown = filter === "all" ? entries : entries.filter((e) => e.status === filter);
+
+  const inputStyle = { borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" };
+  const selStyle = (s) => ({
+    color: ENTRY_STATUS[s]?.color,
+    borderColor: ENTRY_STATUS[s]?.color,
+    backgroundColor: "rgba(0,0,0,0.2)",
+  });
+
+  return (
+    <div>
+      <SectionHeader title="Entries" subtitle="Journal entries you've uploaded and where they stand" />
+
+      <div style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }} className="rounded-xl border p-4 mb-4">
+        <datalist id="entity-list">
+          {entityOptions.map((o) => (
+            <option key={o} value={o} />
+          ))}
+        </datalist>
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+          <label className="flex flex-col gap-1">
+            <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Entity</span>
+            <input
+              list="entity-list"
+              value={entity}
+              onChange={(e) => setEntity(e.target.value)}
+              placeholder="e.g. US01"
+              style={inputStyle}
+              className="text-sm rounded-md border px-2.5 py-1.5 outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Journal ID</span>
+            <input
+              value={jid}
+              onChange={(e) => setJid(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && add()}
+              placeholder="Journal ID"
+              style={inputStyle}
+              className="text-sm rounded-md border px-2.5 py-1.5 outline-none font-mono"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Status</span>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              style={selStyle(status)}
+              className="text-sm rounded-md border px-2 py-1.5 outline-none"
+            >
+              {Object.entries(ENTRY_STATUS).map(([k, v]) => (
+                <option key={k} value={k} style={{ color: "#344356" }}>{v.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="mt-3">
+          <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Note</span>
+          <div className="mt-1">
+            <AutoTextArea value={note} onChange={setNote} placeholder="Optional note…" />
+          </div>
+        </div>
+        <div className="mt-3 flex justify-end">
+          <PrimaryButton onClick={add}>
+            <Plus size={14} /> Add entry
+          </PrimaryButton>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        {[["all", "All"], ...Object.entries(ENTRY_STATUS).map(([k, v]) => [k, v.label])].map(([k, label]) => {
+          const active = filter === k;
+          return (
+            <button
+              key={k}
+              onClick={() => setFilter(k)}
+              style={{
+                backgroundColor: active ? AMBER : "transparent",
+                color: active ? "#344356" : SUBTEXT,
+                borderColor: active ? AMBER : PANEL_LINE,
+              }}
+              className="text-xs font-semibold rounded-full border px-3 py-1"
+            >
+              {label} · {counts[k] || 0}
+            </button>
+          );
+        })}
+      </div>
+
+      {shown.length === 0 ? (
+        <EmptyState text="No entries yet." />
+      ) : (
+        <div className="space-y-2">
+          <div
+            style={{ color: SUBTEXT }}
+            className="hidden md:grid grid-cols-[130px_170px_170px_1fr_20px] gap-3 px-3 text-[11px] tracking-wide"
+          >
+            <span>Entity</span>
+            <span>Journal ID</span>
+            <span>Status</span>
+            <span>Note</span>
+            <span></span>
+          </div>
+          {shown.map((e) => (
+            <div
+              key={e.id}
+              style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }}
+              className="rounded-lg border p-3 grid grid-cols-2 md:grid-cols-[130px_170px_170px_1fr_20px] gap-3 items-start"
+            >
+              <input
+                list="entity-list"
+                value={e.entity}
+                onChange={(ev) => update(e.id, { entity: ev.target.value })}
+                placeholder="Entity"
+                style={inputStyle}
+                className="w-full text-sm rounded-md border px-2.5 py-1.5 outline-none"
+              />
+              <input
+                value={e.jid}
+                onChange={(ev) => update(e.id, { jid: ev.target.value })}
+                placeholder="Journal ID"
+                style={inputStyle}
+                className="w-full text-sm rounded-md border px-2.5 py-1.5 outline-none font-mono"
+              />
+              <select
+                value={e.status}
+                onChange={(ev) => update(e.id, { status: ev.target.value })}
+                style={selStyle(e.status)}
+                className="w-full text-sm font-semibold rounded-md border px-2 py-1.5 outline-none"
+              >
+                {Object.entries(ENTRY_STATUS).map(([k, v]) => (
+                  <option key={k} value={k} style={{ color: "#344356" }}>{v.label}</option>
+                ))}
+              </select>
+              <div className="col-span-2 md:col-span-1 order-last md:order-none">
+                <AutoTextArea value={e.note || ""} onChange={(v) => update(e.id, { note: v })} placeholder="Note…" />
+              </div>
+              <div className="justify-self-end pt-1.5">
+                <IconBtn onClick={() => remove(e.id)} danger>
+                  <Trash2 size={15} />
+                </IconBtn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
 function DashboardView({ meetings, todos, tasks, comms, trainings, docs, contacts, notes, goTo }) {
@@ -1518,6 +1764,7 @@ export default function PersonalWorkbench() {
   const [srBlEntries, setSrBlEntries] = useState([]);
   const [srJeCustom, setSrJeCustom] = useState([]);
   const [srBlCustom, setSrBlCustom] = useState([]);
+  const [entries, setEntries] = useState([]);
 
   useEffect(() => {
     (async () => {
@@ -1542,6 +1789,7 @@ export default function PersonalWorkbench() {
         loadKey(STORE_KEYS.srBlEntries, setSrBlEntries),
         loadKey(STORE_KEYS.srJeCustom, setSrJeCustom),
         loadKey(STORE_KEYS.srBlCustom, setSrBlCustom),
+        loadKey(STORE_KEYS.entries, setEntries),
       ]);
       setLoaded(true);
     })();
@@ -1595,6 +1843,10 @@ export default function PersonalWorkbench() {
     if (!loaded) return;
     storage.set(STORE_KEYS.srBlCustom, JSON.stringify(srBlCustom)).catch(() => {});
   }, [srBlCustom, loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    storage.set(STORE_KEYS.entries, JSON.stringify(entries)).catch(() => {});
+  }, [entries, loaded]);
 
   const openTodoCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
 
@@ -1659,6 +1911,7 @@ export default function PersonalWorkbench() {
         {tab === "docs" && <DocsView docs={docs} setDocs={setDocs} />}
         {tab === "contacts" && <ContactsView contacts={contacts} setContacts={setContacts} />}
         {tab === "notes" && <NotesView notes={notes} setNotes={setNotes} />}
+        {tab === "entries" && <EntriesView entries={entries} setEntries={setEntries} />}
         {tab === "selfreview" && (
           <SelfReviewView
             srJeEntries={srJeEntries}
