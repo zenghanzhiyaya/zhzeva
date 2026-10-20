@@ -142,7 +142,7 @@ const OPT_STYLE = { color: "#111111", backgroundColor: "#FFFFFF" };
 const badgeStyle = (c) => ({ color: c, borderColor: c, backgroundColor: c + "30" });
 const lockedStyle = (locked) =>
   locked
-    ? { borderColor: "transparent", backgroundColor: "transparent", color: TEXT }
+    ? { borderColor: "rgba(255,255,255,0.35)", backgroundColor: "rgba(255,255,255,0.05)", color: TEXT }
     : { borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" };
 
 // Text input that turns into plain text while its card is locked.
