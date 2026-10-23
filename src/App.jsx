@@ -8,6 +8,7 @@ import {
   Trash2,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Circle,
   CheckCircle2,
   Layers,
@@ -15,6 +16,7 @@ import {
   Contact,
   FileSpreadsheet,
   Settings as SettingsIcon,
+  CalendarDays,
   Pencil,
   Check,
 } from "lucide-react";
@@ -83,6 +85,7 @@ const NAV_ITEMS = [
   { key: "todos", label: "To-Do", icon: CheckSquare },
   { key: "comms", label: "Follow-ups", icon: MessageCircle },
   { key: "tasks", label: "Tasks", icon: Layers },
+  { key: "close", label: "Close Plan", icon: CalendarDays },
   { key: "meetings", label: "Meetings", icon: Users },
   { key: "contacts", label: "Contacts", icon: Contact },
   { key: "je", label: "JE Tracker", icon: FileSpreadsheet },
@@ -97,6 +100,7 @@ const STORE_KEYS = {
   contacts: "workbench-contacts",
   notes: "workbench-notes",
   je: "workbench-je-tracker",
+  close: "workbench-close-plan",
 };
 
 const TASK_STATUS = {
@@ -1187,6 +1191,612 @@ function JeTrackerView({ entries, setEntries }) {
 }
 
 // ---------------------------------------------------------------------------
+// Close Plan (monthly close checklist with day-by-day timeline)
+// ---------------------------------------------------------------------------
+const CP_DAY_ORDER = ["Preclose", "Day 1", "Day 2", "Day 3", "Day 3/6", "Day 4", "Day 6", "Day 7", "Day 9", "Post Close"];
+const CP_CATEGORIES = ["Bad Debt", "Bank Recs", "Fixed Assets", "Other", "Professional Fees", "Rebillables"];
+const CP_STATUS = {
+  "not-started": { label: "Not Started", color: "#A8B3C7" },
+  "in-progress": { label: "In Progress", color: "#4FC3F7" },
+  stuck: { label: "Stuck", color: "#F87171" },
+  "following-up": { label: "Following Up", color: "#FBBF24" },
+  complete: { label: "Complete", color: "#4ADE80" },
+};
+const CP_CAT_COLOR = {
+  "Fixed Assets": "#60A5FA",
+  "Bad Debt": "#F87171",
+  "Professional Fees": "#C4A7F5",
+  Rebillables: "#FBBF24",
+  "Bank Recs": "#4ADE80",
+  Other: "#A8B3C7",
+};
+const CP_DAY_OFFSET = { Preclose: -1, "Day 1": 0, "Day 2": 1, "Day 3": 2, "Day 3/6": [2, 5], "Day 4": 3, "Day 6": 5, "Day 7": 6, "Day 9": 8, "Post Close": null };
+const CP_DEFAULT_TASKS = [
+  { id: "rd-review", day: "Preclose", cat: "Fixed Assets", name: "R&D Project Review – need Tanu's sign-off", prep: "Eva/Paul", rev: "Liz" },
+  { id: "fa-transfers", day: "Day 1", cat: "Fixed Assets", name: "Fixed Assets: Transfers", prep: "Eva/Paul", rev: "Liz" },
+  { id: "acct-accrual", day: "Day 2", cat: "Professional Fees", name: "Accounting Fee's Accrual – Current Month", prep: "Eva", rev: "Liz" },
+  { id: "acct-trueup", day: "Day 2", cat: "Professional Fees", name: "Accounting Fee's – True-Up's", prep: "Eva", rev: "Liz" },
+  { id: "fa-amexp", day: "Day 2", cat: "Fixed Assets", name: "Fixed Assets: AMEXP (expense under $1k)", prep: "Eva/Paul", rev: "Liz" },
+  { id: "fa-add-rcls", day: "Day 2", cat: "Fixed Assets", name: "Fixed Assets: Additions Reclasses", prep: "Eva/Paul", rev: "Liz" },
+  { id: "bna-config", day: "Day 2", cat: "Other", name: "BNA Configuration Review – Fixed Assets Useful Lives (Nov)", prep: "Eva/Paul", rev: "Diana" },
+  { id: "bad-general", day: "Day 3", cat: "Bad Debt", name: "Bad Debt General – Including BTG and Atreus", prep: "Eva", rev: "Liz" },
+  { id: "fa-additions", day: "Day 3", cat: "Fixed Assets", name: "Fixed Assets: Additions", prep: "Eva/Paul", rev: "Liz" },
+  { id: "fa-disposals", day: "Day 3", cat: "Fixed Assets", name: "Fixed Assets: Disposals", prep: "Eva/Paul", rev: "Liz" },
+  { id: "fa-cost-adj", day: "Day 3", cat: "Fixed Assets", name: "Fixed Assets: Cost Adjustments", prep: "Eva/Paul", rev: "Liz" },
+  { id: "fa-depr", day: "Day 3", cat: "Fixed Assets", name: "Fixed Assets: Depreciation", prep: "Eva/Paul", rev: "Liz" },
+  { id: "fa-sl-rcls", day: "Day 3", cat: "Fixed Assets", name: "Fixed Assets: SL Allocation Reclass", prep: "Eva/Paul", rev: "Liz" },
+  { id: "subledger-chk", day: "Day 3", cat: "Rebillables", name: "Subledger to GL Check", dep: "Must complete before Rebillables entries", prep: "Eva", rev: "Paul" },
+  { id: "rebill-1", day: "Day 3", cat: "Rebillables", name: "Rebillables 1", prep: "Eva", rev: "Paul" },
+  { id: "rebill-23", day: "Day 3", cat: "Rebillables", name: "Rebillables 2&3", prep: "Eva", rev: "Paul" },
+  { id: "rebill-add", day: "Day 3", cat: "Rebillables", name: "Rebillables Additional Entry", prep: "Eva", rev: "Paul" },
+  { id: "wip-rec", day: "Day 3", cat: "Fixed Assets", name: "WIP Rec", prep: "Eva/Paul", rev: "Liz" },
+  { id: "depr-tieout", day: "Day 3", cat: "Fixed Assets", name: "Depreciation Tie-Out", prep: "Eva/Paul", rev: "Liz" },
+  { id: "bna-gl-rec", day: "Day 3", cat: "Fixed Assets", name: "BNA to GL Rec (including controls)", prep: "Eva/Paul", rev: "Liz" },
+  { id: "purch-chk", day: "Day 3", cat: "Fixed Assets", name: "Purchase Account Check", prep: "Eva/Paul", rev: "Liz" },
+  { id: "close-bna", day: "Day 3", cat: "Fixed Assets", name: "Close BNA", prep: "Eva/Paul", rev: null },
+  { id: "reclass-150700", day: "Day 3/6", cat: "Fixed Assets", name: "Reclass 150700 accruals to expense", prep: "Eva/Paul", rev: "Liz" },
+  { id: "bad-specific", day: "Day 4", cat: "Bad Debt", name: "Bad Debt Specific", prep: "Eva", rev: "Liz" },
+  { id: "hsusa-bank", day: "Day 4", cat: "Bank Recs", name: "HSUSA Bank Rec", prep: "Eva", rev: "Liz" },
+  { id: "rebill-trend", day: "Day 6", cat: "Rebillables", name: "Rebillable Trend Analysis", prep: "Eva", rev: "Paul" },
+  { id: "bad-rollforward", day: "Day 7", cat: "Bad Debt", name: "Bad Debt Rollforward", prep: "Eva/Paul", rev: "Liz" },
+  { id: "cash-flow", day: "Day 7", cat: "Fixed Assets", name: "Cash Flow", prep: "Eva/Paul", rev: "Liz" },
+  { id: "fa-rollforward", day: "Day 7", cat: "Fixed Assets", name: "Fixed Asset Rollforward", prep: "Eva/Paul", rev: "Liz" },
+  { id: "rent-ga-walk", day: "Day 9", cat: "Other", name: "Rent G&A Walk", prep: "All", rev: null },
+  { id: "ap-gl-touch", day: "Post Close", cat: "Other", name: "Send AP to GL touchpoint items by 8/18", prep: "All", rev: "Liz" },
+];
+
+const CP_WDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const CP_MONS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function cpAddBizDays(base, n) {
+  const d = new Date(base.getTime());
+  if (n === 0) return d;
+  const dir = n > 0 ? 1 : -1;
+  let rem = Math.abs(n);
+  while (rem > 0) {
+    d.setDate(d.getDate() + dir);
+    if (d.getDay() !== 0 && d.getDay() !== 6) rem--;
+  }
+  return d;
+}
+function cpDayBadge(day1, label) {
+  if (!day1) return "";
+  const off = CP_DAY_OFFSET[label];
+  if (off === null || off === undefined) return "";
+  const base = new Date(day1 + "T12:00:00");
+  const short = (d) => `${CP_MONS[d.getMonth()]} ${d.getDate()}`;
+  if (Array.isArray(off)) return `${short(cpAddBizDays(base, off[0]))} – ${short(cpAddBizDays(base, off[1]))}`;
+  const d = cpAddBizDays(base, off);
+  return `${CP_WDAYS[d.getDay()]}, ${short(d)}`;
+}
+function cpMakeMonth(label) {
+  return { id: uid("m"), label, day1: null, tasks: CP_DEFAULT_TASKS.map((t) => ({ ...t, dep: t.dep || null })), state: {} };
+}
+function makeInitialPlan() {
+  const m = cpMakeMonth(new Date().toLocaleString("en-US", { month: "long", year: "numeric" }));
+  return { months: [m], activeId: m.id };
+}
+function cpMatches(t, person) {
+  const p = t.prep || "", r = t.rev || "";
+  return person === "all" || p === "All" || r === "All" || p.includes(person) || r === person;
+}
+
+function CpEditForm({ t, onSave, onCancel, onDelete }) {
+  const [d, setD] = useState({ name: t.name, cat: t.cat, day: t.day, prep: t.prep || "", rev: t.rev || "", dep: t.dep || "" });
+  const set = (k) => (v) => setD((x) => ({ ...x, [k]: v }));
+  const selCls = "text-sm rounded-md border px-2.5 py-1.5 outline-none";
+  const selSt = { borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" };
+  return (
+    <div style={{ borderColor: AMBER, backgroundColor: PANEL }} className="border-2 rounded-lg p-3 flex flex-col gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Field className="sm:col-span-1" label="Task Name" value={d.name} onChange={set("name")} placeholder="Task name" />
+        <label className="flex flex-col gap-1">
+          <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Category</span>
+          <select value={d.cat} onChange={(e) => set("cat")(e.target.value)} style={selSt} className={selCls}>
+            {CP_CATEGORIES.map((c) => (
+              <option key={c} value={c} style={OPT_STYLE}>{c}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Day</span>
+          <select value={d.day} onChange={(e) => set("day")(e.target.value)} style={selSt} className={selCls}>
+            {CP_DAY_ORDER.map((c) => (
+              <option key={c} value={c} style={OPT_STYLE}>{c}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Field label="Preparer" value={d.prep} onChange={set("prep")} placeholder="e.g. Eva / Eva/Paul / All" />
+        <Field label="Reviewer" value={d.rev} onChange={set("rev")} placeholder="Leave blank for N/A" />
+        <Field label="Dependency / Note (shown under task)" value={d.dep} onChange={set("dep")} placeholder="Optional prerequisite note" />
+      </div>
+      <div className="flex gap-2 items-center">
+        <PrimaryButton
+          onClick={() => {
+            if (!d.name.trim()) return;
+            onSave({ name: d.name.trim(), cat: d.cat, day: d.day, prep: d.prep.trim() || "TBD", rev: d.rev.trim() || null, dep: d.dep.trim() || null });
+          }}
+        >
+          <Check size={14} /> Save
+        </PrimaryButton>
+        <button onClick={onCancel} style={{ color: SUBTEXT, borderColor: PANEL_LINE }} className="text-sm rounded-full border px-4 py-1.5">
+          Cancel
+        </button>
+        <button onClick={onDelete} style={{ color: DANGER }} className="ml-auto text-sm flex items-center gap-1">
+          <Trash2 size={14} /> Delete task
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CpTaskRow({ m, t, setState, onEdit, onDragStart, onDragEnd, dragId, onDropRow, onMove }) {
+  const rowRef = useRef(null);
+  const [hover, setHover] = useState(null); // "before" | "after" | null
+  const prepDone = !!m.state[t.id + "-p"];
+  const revDone = !!m.state[t.id + "-r"];
+  const allDone = prepDone && (t.rev == null || revDone);
+  const status = m.state[t.id + "-s"] || "not-started";
+  const note = m.state[t.id + "-n"] || "";
+  const [noteOpen, setNoteOpen] = useState(note.trim().length > 0);
+  const [noteEditing, setNoteEditing] = useState(note.trim().length === 0);
+  const color = CP_CAT_COLOR[t.cat] || CP_CAT_COLOR.Other;
+  const chk = (key, done, person, label) => (
+    <label className="flex flex-col items-center gap-0.5 cursor-pointer select-none min-w-[58px]">
+      <input type="checkbox" checked={done} onChange={(e) => setState(key, e.target.checked)} style={{ accentColor: AMBER }} className="w-4 h-4" />
+      <span style={{ color: TEXT }} className="text-[11px] font-semibold leading-none">{person}</span>
+      <span style={{ color: SUBTEXT }} className="text-[10px] leading-none">{label}</span>
+    </label>
+  );
+  return (
+    <div
+      ref={rowRef}
+      onDragOver={(e) => {
+        if (!dragId || dragId === t.id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const r = rowRef.current.getBoundingClientRect();
+        setHover(e.clientY < r.top + r.height / 2 ? "before" : "after");
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) setHover(null);
+      }}
+      onDrop={(e) => {
+        if (!dragId || dragId === t.id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const pos = hover || "after";
+        setHover(null);
+        onDropRow(t.id, pos);
+      }}
+      style={{
+        backgroundColor: PANEL,
+        borderColor: PANEL_LINE,
+        borderLeft: `4px solid ${color}`,
+        opacity: dragId === t.id ? 0.4 : allDone ? 0.7 : 1,
+        boxShadow: hover === "before" ? `0 -3px 0 0 ${AMBER}` : hover === "after" ? `0 3px 0 0 ${AMBER}` : "none",
+      }}
+      className="border rounded-lg"
+    >
+      <div className="flex items-center gap-3 px-3 py-2.5 flex-wrap">
+        <div
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", t.id);
+            if (rowRef.current) e.dataTransfer.setDragImage(rowRef.current, 20, 20);
+            onDragStart(t.id);
+          }}
+          onDragEnd={onDragEnd}
+          title="Drag to reorder, or drop onto another day"
+          style={{ color: SUBTEXT }}
+          className="cursor-grab text-lg leading-none select-none px-0.5"
+        >
+          ⋮⋮
+        </div>
+        <div className="flex flex-col -my-1">
+          <button onClick={() => onMove(-1)} title="Move up" style={{ color: SUBTEXT }} className="opacity-60 hover:opacity-100">
+            <ChevronUp size={14} />
+          </button>
+          <button onClick={() => onMove(1)} title="Move down" style={{ color: SUBTEXT }} className="opacity-60 hover:opacity-100">
+            <ChevronDown size={14} />
+          </button>
+        </div>
+        <div className="flex-1 min-w-[180px]">
+          <div style={{ color: TEXT, textDecoration: allDone ? "line-through" : "none" }} className="text-sm font-medium">
+            {t.name}
+          </div>
+          {t.dep && (
+            <div style={{ color: "#FBBF24" }} className="text-[11px] mt-0.5">
+              ⚑ {t.dep}
+            </div>
+          )}
+        </div>
+        <span style={{ color, borderColor: color }} className="text-[10px] font-bold border rounded-full px-2 py-0.5 shrink-0">
+          {t.cat}
+        </span>
+        <select
+          value={status}
+          onChange={(e) => setState(t.id + "-s", e.target.value)}
+          style={badgeStyle(CP_STATUS[status].color)}
+          className="text-[11px] font-bold border rounded px-1.5 py-0.5 shrink-0 outline-none"
+        >
+          {Object.entries(CP_STATUS).map(([k, v]) => (
+            <option key={k} value={k} style={OPT_STYLE}>{v.label}</option>
+          ))}
+        </select>
+        <IconBtn onClick={onEdit}>
+          <Pencil size={15} />
+        </IconBtn>
+        <button
+          onClick={() => setNoteOpen((v) => !v)}
+          style={{ color: note.trim() ? AMBER : SUBTEXT }}
+          className="text-xs font-semibold shrink-0"
+        >
+          {note.trim() ? "● Note" : "Note"}
+        </button>
+        <div className="flex gap-2 shrink-0">
+          {chk(t.id + "-p", prepDone, t.prep, "Prepared")}
+          {t.rev ? (
+            chk(t.id + "-r", revDone, t.rev, "Reviewed")
+          ) : (
+            <div className="flex flex-col items-center gap-0.5 min-w-[58px] opacity-50">
+              <span className="w-4 h-4 text-center text-[10px]" style={{ color: SUBTEXT }}>–</span>
+              <span style={{ color: TEXT }} className="text-[11px] font-semibold leading-none">N/A</span>
+              <span style={{ color: SUBTEXT }} className="text-[10px] leading-none">Reviewed</span>
+            </div>
+          )}
+        </div>
+      </div>
+      {noteOpen && (
+        <LockCtx.Provider value={!noteEditing}>
+          <div className="px-3 pb-3 flex gap-2 items-start">
+            <div className="flex-1 min-w-0">
+              <AutoTextArea
+                value={note}
+                onChange={(v) => setState(t.id + "-n", v)}
+                placeholder="Add a note, blocker, or follow-up detail…"
+              />
+            </div>
+            <EditToggle editing={noteEditing} onClick={() => setNoteEditing((v) => !v)} />
+          </div>
+        </LockCtx.Provider>
+      )}
+    </div>
+  );
+}
+
+function ClosePlanView({ plan, setPlan }) {
+  const [filter, setFilter] = useState("all");
+  const [editingId, setEditingId] = useState(null);
+  const [dragId, setDragId] = useState(null);
+  const [dragOver, setDragOver] = useState(null);
+  const [newLabel, setNewLabel] = useState(null);
+  const [renaming, setRenaming] = useState(false);
+
+  const m = plan.months.find((x) => x.id === plan.activeId) || plan.months[0];
+  const patchMonth = (fn) => setPlan((prev) => ({ ...prev, months: prev.months.map((x) => (x.id === m.id ? fn(x) : x)) }));
+  const setState = (key, val) => patchMonth((x) => ({ ...x, state: { ...x.state, [key]: val } }));
+  const updateTask = (id, patch) => patchMonth((x) => ({ ...x, tasks: x.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
+
+  // Reorder: put the dragged task before/after a target task (also changes its day to the target's day).
+  const dropOnTask = (targetId, pos) => {
+    if (!dragId || dragId === targetId) return;
+    patchMonth((x) => {
+      const dragged = x.tasks.find((t) => t.id === dragId);
+      const target = x.tasks.find((t) => t.id === targetId);
+      if (!dragged || !target) return x;
+      const rest = x.tasks.filter((t) => t.id !== dragId);
+      const idx = rest.findIndex((t) => t.id === targetId);
+      rest.splice(pos === "before" ? idx : idx + 1, 0, { ...dragged, day: target.day });
+      return { ...x, tasks: rest };
+    });
+    setDragId(null);
+    setDragOver(null);
+  };
+  // Move up/down within the same day (works on touch screens too).
+  const moveTask = (id, dir) =>
+    patchMonth((x) => {
+      const t = x.tasks.find((y) => y.id === id);
+      const sameDay = x.tasks.filter((y) => y.day === t.day && cpMatches(y, filter));
+      const i = sameDay.findIndex((y) => y.id === id);
+      const other = sameDay[i + dir];
+      if (!other) return x;
+      const arr = [...x.tasks];
+      const a = arr.findIndex((y) => y.id === id);
+      const b = arr.findIndex((y) => y.id === other.id);
+      [arr[a], arr[b]] = [arr[b], arr[a]];
+      return { ...x, tasks: arr };
+    });
+
+  const people = useMemo(() => {
+    const set = new Set();
+    m.tasks.forEach((t) => [t.prep, t.rev].forEach((v) => (v || "").split("/").forEach((p) => {
+      const n = p.trim();
+      if (n && n !== "All" && n !== "TBD") set.add(n);
+    })));
+    return ["all", ...Array.from(set)];
+  }, [m.tasks]);
+
+  const visible = m.tasks.filter((t) => cpMatches(t, filter));
+  const stats = useMemo(() => {
+    let prep = 0, rev = 0;
+    const sc = {};
+    Object.keys(CP_STATUS).forEach((k) => (sc[k] = 0));
+    visible.forEach((t) => {
+      const p = !!m.state[t.id + "-p"];
+      const r = !!m.state[t.id + "-r"];
+      if (p) prep++;
+      if (t.rev == null ? p : r) rev++;
+      sc[m.state[t.id + "-s"] || "not-started"]++;
+    });
+    const total = visible.length;
+    return { prep, rev, total, sc, pct: total ? Math.round(((prep + rev) / (total * 2)) * 100) : 0 };
+  }, [visible, m.state]);
+
+  const monthPct = (x) => {
+    let done = 0;
+    x.tasks.forEach((t) => {
+      if (x.state[t.id + "-p"] && (t.rev == null || x.state[t.id + "-r"])) done++;
+    });
+    return x.tasks.length ? Math.round((done / x.tasks.length) * 100) : 0;
+  };
+
+  const addMonth = () => {
+    const label = (newLabel || "").trim();
+    if (!label) return;
+    const nm = cpMakeMonth(label);
+    setPlan((prev) => ({ months: [...prev.months, nm], activeId: nm.id }));
+    setNewLabel(null);
+    setFilter("all");
+  };
+  const removeMonth = () => {
+    if (plan.months.length === 1) return;
+    if (!window.confirm(`Delete "${m.label}"? This cannot be undone.`)) return;
+    setPlan((prev) => {
+      const months = prev.months.filter((x) => x.id !== m.id);
+      return { months, activeId: months[0].id };
+    });
+  };
+  const addTask = (day) => {
+    const t = { id: uid("t"), day, cat: "Fixed Assets", name: "", prep: "Eva", rev: "Liz", dep: null };
+    patchMonth((x) => ({ ...x, tasks: [...x.tasks, t] }));
+    setEditingId(t.id);
+  };
+  const removeTask = (t) => {
+    if (!window.confirm(`Delete "${t.name || "this task"}"?`)) return;
+    patchMonth((x) => ({ ...x, tasks: x.tasks.filter((y) => y.id !== t.id) }));
+    setEditingId(null);
+  };
+
+  return (
+    <div>
+      <SectionHeader
+        title="Close Plan"
+        subtitle="Monthly close checklist, day by day"
+        action={
+          newLabel === null ? (
+            <PrimaryButton onClick={() => setNewLabel("")}>
+              <Plus size={15} /> New Month
+            </PrimaryButton>
+          ) : (
+            <div className="flex gap-2 items-center">
+              <input
+                autoFocus
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") addMonth();
+                  if (e.key === "Escape") setNewLabel(null);
+                }}
+                placeholder="e.g. November 2026"
+                style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" }}
+                className="text-sm rounded-md border px-2.5 py-1.5 outline-none"
+              />
+              <PrimaryButton onClick={addMonth}>Create</PrimaryButton>
+            </div>
+          )
+        }
+      />
+
+      <div className="flex gap-2 flex-wrap mb-4">
+        {plan.months.map((x) => {
+          const active = x.id === m.id;
+          return (
+            <button
+              key={x.id}
+              onClick={() => {
+                setPlan((prev) => ({ ...prev, activeId: x.id }));
+                setEditingId(null);
+                setFilter("all");
+              }}
+              style={{
+                backgroundColor: active ? AMBER : "transparent",
+                color: active ? ON_ACCENT : SUBTEXT,
+                borderColor: active ? AMBER : PANEL_LINE,
+              }}
+              className="text-xs font-semibold rounded-full border px-3 py-1"
+            >
+              {x.label} · {monthPct(x)}%
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-xl p-4 mb-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <LockCtx.Provider value={!renaming}>
+            <LockInput
+              value={m.label}
+              onChange={(e) => patchMonth((x) => ({ ...x, label: e.target.value }))}
+              className="text-lg font-bold rounded-md border px-2.5 py-1 min-w-[180px]"
+            />
+          </LockCtx.Provider>
+          <EditToggle editing={renaming} onClick={() => setRenaming((v) => !v)} />
+          {plan.months.length > 1 && (
+            <IconBtn danger onClick={removeMonth}>
+              <Trash2 size={15} />
+            </IconBtn>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <span style={{ color: SUBTEXT }} className="text-xs">Day 1 of close</span>
+            <input
+              type="date"
+              value={m.day1 || ""}
+              onChange={(e) => patchMonth((x) => ({ ...x, day1: e.target.value || null }))}
+              style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" }}
+              className="text-sm rounded-md border px-2.5 py-1 outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 mt-4 max-w-md">
+          {[
+            ["Prepared", `${stats.prep}/${stats.total}`],
+            ["Reviewed", `${stats.rev}/${stats.total}`],
+            ["Complete", `${stats.pct}%`],
+          ].map(([l, v]) => (
+            <div key={l}>
+              <div style={{ color: TEXT }} className="text-xl font-bold">{v}</div>
+              <div style={{ color: SUBTEXT }} className="text-xs">{l}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ backgroundColor: "rgba(0,0,0,0.25)" }} className="h-2 rounded-full mt-3 overflow-hidden">
+          <div style={{ width: `${stats.pct}%`, backgroundColor: AMBER }} className="h-full transition-all" />
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
+          {Object.entries(CP_STATUS).map(([k, v]) => (
+            <span key={k} style={{ color: stats.sc[k] > 0 ? TEXT : SUBTEXT }} className="text-xs flex items-center gap-1.5">
+              <span style={{ backgroundColor: v.color }} className="w-2 h-2 rounded-full inline-block" />
+              {stats.sc[k]} {v.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2 flex-wrap mb-4 items-center">
+        <span style={{ color: SUBTEXT }} className="text-xs mr-1">View</span>
+        {people.map((p) => (
+          <button
+            key={p}
+            onClick={() => setFilter(p)}
+            style={{
+              backgroundColor: filter === p ? AMBER_SOFT : "transparent",
+              color: filter === p ? AMBER : SUBTEXT,
+              borderColor: filter === p ? AMBER : PANEL_LINE,
+            }}
+            className="text-xs font-semibold rounded-full border px-3 py-1"
+          >
+            {p === "all" ? "All" : p}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-5">
+        {CP_DAY_ORDER.map((day) => {
+          const tasks = visible.filter((t) => t.day === day);
+          if (!tasks.length) return null;
+          const badge = cpDayBadge(m.day1, day);
+          const over = dragOver === day;
+          return (
+            <div
+              key={day}
+              onDragOver={(e) => {
+                if (!dragId) return;
+                e.preventDefault();
+                setDragOver(day);
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(null);
+                const t = m.tasks.find((x) => x.id === dragId);
+                if (t) {
+                  patchMonth((x) => {
+                    const rest = x.tasks.filter((y) => y.id !== dragId);
+                    let last = -1;
+                    rest.forEach((y, i) => {
+                      if (y.day === day) last = i;
+                    });
+                    rest.splice(last + 1, 0, { ...t, day });
+                    return { ...x, tasks: rest };
+                  });
+                }
+                setDragId(null);
+              }}
+              style={{ outline: over ? `2px dashed ${AMBER}` : "none", outlineOffset: 4 }}
+              className="rounded-lg"
+            >
+              <div className="flex items-center gap-3 mb-2">
+                <span style={{ backgroundColor: AMBER, color: ON_ACCENT }} className="text-xs font-bold rounded-full px-3 py-1">
+                  {day}
+                </span>
+                {badge && <span style={{ color: TEXT }} className="text-xs font-semibold">{badge}</span>}
+                <div style={{ backgroundColor: PANEL_LINE }} className="flex-1 h-px" />
+                <span style={{ color: SUBTEXT }} className="text-xs">
+                  {tasks.length} task{tasks.length !== 1 ? "s" : ""}
+                </span>
+                <button onClick={() => addTask(day)} style={{ color: AMBER }} className="text-xs font-semibold flex items-center gap-1">
+                  <Plus size={12} /> Add
+                </button>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {tasks.map((t) =>
+                  editingId === t.id ? (
+                    <CpEditForm
+                      key={t.id}
+                      t={t}
+                      onSave={(patch) => {
+                        updateTask(t.id, patch);
+                        setEditingId(null);
+                      }}
+                      onCancel={() => {
+                        if (!t.name) patchMonth((x) => ({ ...x, tasks: x.tasks.filter((y) => y.id !== t.id) }));
+                        setEditingId(null);
+                      }}
+                      onDelete={() => removeTask(t)}
+                    />
+                  ) : (
+                    <CpTaskRow
+                      key={t.id}
+                      m={m}
+                      t={t}
+                      setState={setState}
+                      onEdit={() => setEditingId(t.id)}
+                      dragId={dragId}
+                      onDropRow={dropOnTask}
+                      onMove={(dir) => moveTask(t.id, dir)}
+                      onDragStart={setDragId}
+                      onDragEnd={() => {
+                        setDragId(null);
+                        setDragOver(null);
+                      }}
+                    />
+                  )
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-6">
+        {Object.entries(CP_CAT_COLOR).map(([k, c]) => (
+          <span key={k} style={{ color: SUBTEXT }} className="text-xs flex items-center gap-1.5">
+            <span style={{ backgroundColor: c }} className="w-2 h-2 rounded-full inline-block" />
+            {k}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Settings (theme colors)
 // ---------------------------------------------------------------------------
 function SettingsView({ themeKey, setThemeKey }) {
@@ -1357,6 +1967,7 @@ function DashboardView({ meetings, todos, tasks, comms, entries, contacts, notes
 // ---------------------------------------------------------------------------
 export default function PersonalWorkbench() {
   const [tab, setTab] = useState("dashboard");
+  const [closePlan, setClosePlan] = useState(null);
   const [themeKey, setThemeKeyState] = useState(savedThemeKey);
   const setThemeKey = (k) => {
     setThemeKeyState(k);
@@ -1384,7 +1995,17 @@ export default function PersonalWorkbench() {
           setter([]);
         }
       };
+      const loadPlan = async () => {
+        try {
+          const r = await storage.get(STORE_KEYS.close);
+          const parsed = r?.value ? JSON.parse(r.value) : null;
+          setClosePlan(parsed && Array.isArray(parsed.months) && parsed.months.length ? parsed : makeInitialPlan());
+        } catch {
+          setClosePlan(makeInitialPlan());
+        }
+      };
       await Promise.all([
+        loadPlan(),
         loadKey(STORE_KEYS.meetings, setMeetings),
         loadKey(STORE_KEYS.todos, setTodos),
         loadKey(STORE_KEYS.tasks, setTasks),
@@ -1425,6 +2046,11 @@ export default function PersonalWorkbench() {
     if (!loaded) return;
     storage.set(STORE_KEYS.je, JSON.stringify(entries)).catch(() => {});
   }, [entries, loaded]);
+
+  useEffect(() => {
+    if (!loaded || !closePlan) return;
+    storage.set(STORE_KEYS.close, JSON.stringify(closePlan)).catch(() => {});
+  }, [closePlan, loaded]);
 
   const openTodoCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
 
@@ -1486,6 +2112,7 @@ export default function PersonalWorkbench() {
         {tab === "comms" && <CommsView comms={comms} setComms={setComms} />}
         {tab === "contacts" && <ContactsView contacts={contacts} setContacts={setContacts} />}
         {tab === "notes" && <NotesView notes={notes} setNotes={setNotes} />}
+        {tab === "close" && closePlan && <ClosePlanView plan={closePlan} setPlan={setClosePlan} />}
         {tab === "settings" && <SettingsView themeKey={themeKey} setThemeKey={setThemeKey} />}
         {tab === "je" && <JeTrackerView entries={entries} setEntries={setEntries} />}
       </div>
