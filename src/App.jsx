@@ -50,6 +50,10 @@ const THEMES = [
   { key: "doraemon", name: "Doraemon", bg: "#1F5E9E", panel: "#2B70B4", line: "#4E8FCB", accent: "#FFD34D", onAccent: "#12385F", sidebar: "#164A7D", text: "#FFFFFF", subtext: "#D2E6F7" },
   { key: "moon", fx: "stars", name: "Sailor Moon", bg: "#2B2F6B", panel: "#3A3F82", line: "#5C62A6", accent: "#FF9EC7", onAccent: "#232766", sidebar: "#202458", text: "#FFFFFF", subtext: "#D8D9F3" },
   { key: "garden", fx: "petals", name: "Garden", bg: "#4F6B34", panel: "#5E7B40", line: "#7C9B5B", accent: "#F7A8B8", onAccent: "#3A2A2E", sidebar: "#3C5227", text: "#FFFFFF", subtext: "#E1EBCB" },
+  { key: "tiffany", name: "Tiffany Blue", bg: "#2F7F7C", panel: "#3B918D", line: "#63B5B0", accent: "#A5ECE5", onAccent: "#1C4F4C", sidebar: "#246966", text: "#FFFFFF", subtext: "#D3F1EE" },
+  { key: "retro", name: "Retro Blue & Yellow", bg: "#2E5A78", panel: "#3A6A8B", line: "#5F8DAE", accent: "#EDB93E", onAccent: "#26384A", sidebar: "#244A63", text: "#FFF6DC", subtext: "#E3DAB8" },
+  { key: "mcd", name: "Golden Arches", bg: "#A81F1F", panel: "#BB2D2B", line: "#DA564E", accent: "#FFC72C", onAccent: "#6B1010", sidebar: "#8A1717", text: "#FFFFFF", subtext: "#FBDAD5" },
+  { key: "sbux", name: "Green Siren", bg: "#1E5C46", panel: "#2A7058", line: "#4C9179", accent: "#F6F2E9", onAccent: "#14412F", sidebar: "#164535", text: "#FFFFFF", subtext: "#CFE6DB" },
   { key: "slate", name: "Smoky Slate", bg: "#3F4448", panel: "#4B5156", line: "#5F676D", accent: "#B8C4C0", onAccent: "#2C3135", sidebar: "#31353A", text: "#FFFFFF", subtext: "#B9C0C2" },
 ];
 const CJK = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif';
@@ -60,7 +64,6 @@ const FONTS = [
   { key: "poppins", name: "Poppins", stack: `"Poppins", system-ui, Arial, ${CJK}` },
   { key: "lora", name: "Lora (serif)", stack: `"Lora", Georgia, "Songti SC", "SimSun", serif` },
   { key: "mono", name: "JetBrains Mono", stack: `"JetBrains Mono", ui-monospace, Consolas, ${CJK}` },
-  { key: "noto", name: "Noto Sans SC", stack: `"Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif` },
 ];
 const FONT_KEY = "workbench-font";
 function applyFont(key) {
@@ -1040,7 +1043,10 @@ function JeRow({ e, update, remove, approvers }) {
           />
           <select
             value={e.status}
-            onChange={(ev) => update(e.id, { status: ev.target.value })}
+            onChange={(ev) => {
+              const v = ev.target.value;
+              update(e.id, { status: v });
+            }}
             style={entrySel(e.status)}
             className="w-full text-sm font-semibold rounded-md border px-2 py-1.5 outline-none"
           >
@@ -1071,22 +1077,6 @@ function JeRow({ e, update, remove, approvers }) {
             </IconBtn>
           </div>
         </div>
-        {e.status === "approved" && (
-          <div className="flex justify-end mt-3 pr-2 pb-1">
-            <div
-              style={{
-                color: "#EF4444",
-                border: "3px solid #EF4444",
-                boxShadow: `inset 0 0 0 2px ${PANEL}, inset 0 0 0 3.5px #EF4444`,
-                transform: "rotate(-6deg)",
-                letterSpacing: "0.12em",
-              }}
-              className="rounded-md px-4 py-1.5 text-3xl font-black uppercase select-none opacity-90"
-            >
-              Approved
-            </div>
-          </div>
-        )}
       </div>
     </LockCtx.Provider>
   );
@@ -1387,8 +1377,201 @@ function cpParseLabel(label) {
   return { year: m[2], mi: mi < 0 ? 99 : mi };
 }
 
+const FX_KEY = "workbench-fx";
+const FX = { celebrate: true, ambient: true };
+try {
+  const raw = localStorage.getItem(FX_KEY);
+  if (raw) Object.assign(FX, JSON.parse(raw));
+} catch {}
+function fxOn() {
+  return FX.celebrate && !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+}
+
+function shakeMain() {
+  const el = document.getElementById("wb-main");
+  if (!el) return;
+  el.classList.remove("wb-shake");
+  void el.offsetWidth;
+  el.classList.add("wb-shake");
+  setTimeout(() => el.classList.remove("wb-shake"), 450);
+}
+
+// Full-screen fireworks on a click-through canvas (~5 seconds).
+function fireworks() {
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:9998";
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const palette = ["#FFD34D", "#FF6B6B", "#6BCBFF", "#B388FF", "#7CFFB2", "#FFFFFF", "#FF9EC7"];
+  let parts = [];
+  const burst = () => {
+    const x = canvas.width * (0.15 + Math.random() * 0.7);
+    const y = canvas.height * (0.12 + Math.random() * 0.45);
+    const c1 = palette[Math.floor(Math.random() * palette.length)];
+    const c2 = palette[Math.floor(Math.random() * palette.length)];
+    for (let i = 0; i < 70; i++) {
+      const a = (Math.PI * 2 * i) / 70 + Math.random() * 0.1;
+      const sp = 2 + Math.random() * 4.2;
+      parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, c: i % 2 ? c1 : c2 });
+    }
+  };
+  const start = performance.now();
+  const schedule = [0, 350, 800, 1200, 1700, 2100, 2600, 3000];
+  let next = 0;
+  const tick = (now) => {
+    const t = now - start;
+    while (next < schedule.length && t >= schedule[next]) {
+      burst();
+      next++;
+    }
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = "source-over";
+    parts.forEach((p) => {
+      p.vy += 0.045;
+      p.vx *= 0.985;
+      p.vy *= 0.985;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.011;
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.c;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    parts = parts.filter((p) => p.life > 0);
+    if (t < 5200) requestAnimationFrame(tick);
+    else canvas.remove();
+  };
+  requestAnimationFrame(tick);
+}
+
+// Red CLOSED stamp slammed onto the top of the page (used by the preview button).
+function showStamp(sub) {
+  const el = document.createElement("div");
+  el.style.cssText =
+    "position:fixed;left:50%;top:72px;z-index:10000;pointer-events:none;animation:wb-stampfade 4.2s ease-out forwards;";
+  el.innerHTML =
+    '<div style="color:#EF4444;border:4px solid #EF4444;border-radius:10px;padding:4px 26px;text-align:center;letter-spacing:0.18em;font-weight:900;' +
+    'font-size:44px;line-height:1.1;background:rgba(0,0,0,0.12);box-shadow:inset 0 0 0 3px rgba(0,0,0,0.12),inset 0 0 0 5px #EF4444"></div>';
+  el.children[0].textContent = "CLOSED";
+  document.body.appendChild(el);
+  setTimeout(shakeMain, 240);
+  setTimeout(() => el.remove(), 4400);
+}
+
+// Small medal that slides in at the top right.
+function showBadge(title, sub) {
+  let box = document.getElementById("wb-badges");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "wb-badges";
+    box.style.cssText = "position:fixed;top:16px;right:16px;z-index:10000;display:flex;flex-direction:column;gap:8px;pointer-events:none";
+    document.body.appendChild(box);
+  }
+  const el = document.createElement("div");
+  el.style.cssText =
+    "display:flex;align-items:center;gap:10px;padding:10px 16px 10px 10px;border-radius:14px;background:#2A2412;color:#FFF3C4;" +
+    "border:1.5px solid #FFD34D;box-shadow:0 6px 24px rgba(0,0,0,0.35);animation:wb-badge 3.9s ease-out forwards;";
+  el.innerHTML =
+    '<svg width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="15" fill="#FFD34D" stroke="#FFF3B8" stroke-width="2"/>' +
+    '<path d="M17 8l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L8.4 14.3l6-.7z" fill="#8A5A00"/></svg>' +
+    '<div><div class="t" style="font-weight:700;font-size:14px"></div><div class="s" style="font-size:11px;opacity:0.8"></div></div>';
+  el.querySelector(".t").textContent = title;
+  el.querySelector(".s").textContent = sub || "";
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// Number that counts up/down to its new value.
+function CountUp({ value, suffix = "" }) {
+  const [shown, setShown] = useState(value);
+  const cur = useRef(value);
+  useEffect(() => {
+    const from = cur.current;
+    if (from === value) return;
+    const t0 = performance.now();
+    let raf;
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / 550);
+      const v = Math.round(from + (value - from) * (1 - Math.pow(1 - k, 3)));
+      cur.current = v;
+      setShown(v);
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return (
+    <>
+      {shown}
+      {suffix}
+    </>
+  );
+}
+
+// Circular progress; turns gold with a drawn check mark at 100%.
+function ProgressRing({ pct }) {
+  const ref = useRef(null);
+  const prev = useRef(pct);
+  const full = pct >= 100;
+  useEffect(() => {
+    if (prev.current < 100 && full && fxOn() && ref.current) {
+      const r = ref.current.getBoundingClientRect();
+      fireConfetti(r.left + r.width / 2, r.top + r.height / 2, true);
+    }
+    prev.current = pct;
+  }, [pct, full]);
+  const R = 30;
+  const C = 2 * Math.PI * R;
+  const gold = "#FFD34D";
+  return (
+    <div ref={ref} className="relative shrink-0" style={{ width: 76, height: 76 }}>
+      <svg width="76" height="76" viewBox="0 0 76 76">
+        <circle cx="38" cy="38" r={R} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="7" />
+        <circle
+          cx="38"
+          cy="38"
+          r={R}
+          fill="none"
+          stroke={full ? gold : AMBER}
+          strokeWidth="7"
+          strokeLinecap="round"
+          strokeDasharray={C}
+          strokeDashoffset={C * (1 - Math.min(100, pct) / 100)}
+          transform="rotate(-90 38 38)"
+          style={{ transition: "stroke-dashoffset 0.6s ease, stroke 0.3s", filter: full ? "drop-shadow(0 0 6px rgba(255,211,77,0.8))" : "none" }}
+        />
+        {full && (
+          <path
+            d="M26 39l8 8 16-17"
+            fill="none"
+            stroke={gold}
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeDasharray="44"
+            strokeDashoffset="44"
+            style={{ animation: "wb-check 0.5s 0.15s ease-out forwards" }}
+          />
+        )}
+      </svg>
+      {!full && (
+        <div style={{ color: TEXT }} className="absolute inset-0 flex items-center justify-center text-sm font-bold">
+          <CountUp value={pct} suffix="%" />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function fireConfetti(x, y, big) {
-  if (typeof window === "undefined" || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) return;
+  if (typeof window === "undefined" || !fxOn()) return;
   const canvas = document.createElement("canvas");
   canvas.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:9999";
   canvas.width = window.innerWidth;
@@ -1533,6 +1716,8 @@ function CpEditForm({ t, onSave, onCancel, onDelete }) {
 function CpTaskRow({ m, t, setState, onEdit, onDragStart, onDragEnd, dragId, onDropRow, onMove }) {
   const rowRef = useRef(null);
   const [hover, setHover] = useState(null); // "before" | "after" | null
+  const [flash, setFlash] = useState(false);
+  const wasDone = useRef(null);
   const prepDone = !!m.state[t.id + "-p"];
   const revDone = !!m.state[t.id + "-r"];
   const allDone = prepDone && (t.rev == null || revDone);
@@ -1541,6 +1726,15 @@ function CpTaskRow({ m, t, setState, onEdit, onDragStart, onDragEnd, dragId, onD
   const [noteOpen, setNoteOpen] = useState(note.trim().length > 0);
   const [noteEditing, setNoteEditing] = useState(note.trim().length === 0);
   const color = CP_CAT_COLOR[t.cat] || CP_CAT_COLOR.Other;
+  useEffect(() => {
+    if (wasDone.current === false && allDone && fxOn()) {
+      setFlash(true);
+      const id = setTimeout(() => setFlash(false), 1300);
+      wasDone.current = allDone;
+      return () => clearTimeout(id);
+    }
+    wasDone.current = allDone;
+  }, [allDone]);
   const chk = (key, done, person, label) => {
     const isRev = key.endsWith("-r");
     // Finishing the last required box of a task gets the bigger burst.
@@ -1574,9 +1768,26 @@ function CpTaskRow({ m, t, setState, onEdit, onDragStart, onDragEnd, dragId, onD
         borderLeft: `4px solid ${color}`,
         opacity: dragId === t.id ? 0.4 : allDone ? 0.7 : 1,
         boxShadow: hover === "before" ? `0 -3px 0 0 ${AMBER}` : hover === "after" ? `0 3px 0 0 ${AMBER}` : "none",
+        position: "relative",
+        overflow: "hidden",
+        animation: flash ? "wb-flash 1.2s ease-out" : "none",
       }}
       className="border rounded-lg"
     >
+      {flash && (
+        <span
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            left: 0,
+            width: "30%",
+            background: "linear-gradient(90deg, transparent, rgba(255,230,140,0.55), transparent)",
+            animation: "wb-shine 0.9s ease-out forwards",
+            pointerEvents: "none",
+          }}
+        />
+      )}
       <div className="flex items-center gap-3 px-3 py-2.5 flex-wrap">
         <div
           draggable
@@ -1733,6 +1944,40 @@ function ClosePlanView({ plan, setPlan }) {
     return { prep, rev, total, sc, pct: total ? Math.round(((prep + rev) / (total * 2)) * 100) : 0 };
   }, [visible, m.state]);
 
+  // Celebrations: milestone badges and the month-closed fireworks.
+  const [stampKey, setStampKey] = useState(0);
+  const allDone = m.tasks.length > 0 && m.tasks.every((t) => !!m.state[t.id + "-p"] && (t.rev == null || !!m.state[t.id + "-r"]));
+  const doneSig = useRef({ id: null, ids: new Set(), complete: false });
+  useEffect(() => {
+    const isDone = (t) => !!m.state[t.id + "-p"] && (t.rev == null || !!m.state[t.id + "-r"]);
+    const ids = new Set(m.tasks.filter(isDone).map((t) => t.id));
+    const complete = m.tasks.length > 0 && ids.size === m.tasks.length;
+    const prev = doneSig.current;
+    if (prev.id === m.id && fxOn()) {
+      const gained = [...ids].filter((id) => !prev.ids.has(id));
+      if (gained.length > 0) {
+        const badges = [];
+        [5, 10, 20].forEach((th) => {
+          if (prev.ids.size < th && ids.size >= th) badges.push([`${th} tasks done`, m.label]);
+        });
+        CP_DAY_ORDER.forEach((day) => {
+          const list = m.tasks.filter((t) => t.day === day);
+          if (!list.length) return;
+          const now = list.every((t) => ids.has(t.id));
+          const before = list.every((t) => prev.ids.has(t.id));
+          if (now && !before) badges.push([`${day} cleared`, `${list.length} task${list.length !== 1 ? "s" : ""} finished`]);
+        });
+        badges.slice(0, 3).forEach(([a, b], i) => setTimeout(() => showBadge(a, b), i * 450));
+      }
+      if (complete && !prev.complete) {
+        fireworks();
+        setStampKey((k) => k + 1);
+        setTimeout(shakeMain, 240);
+      }
+    }
+    doneSig.current = { id: m.id, ids, complete };
+  }, [m.id, m.tasks, m.state]);
+
   const addMonth = () => {
     const label = (newLabel || "").trim();
     if (!label) return;
@@ -1786,7 +2031,33 @@ function ClosePlanView({ plan, setPlan }) {
         }
       />
 
-      <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-xl p-4 mb-4">
+      <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-xl p-4 mb-4 relative">
+        {allDone && (
+          <div className="absolute left-1/2 -top-9 pointer-events-none z-10" style={{ marginLeft: -70 }}>
+            {stampKey > 0 && (
+              <span
+                key={"ring" + stampKey}
+                style={{ border: "3px solid #EF4444", animation: "wb-ring 0.9s 0.22s ease-out both" }}
+                className="absolute inset-0 rounded-lg"
+              />
+            )}
+            <div
+              key={"stamp" + stampKey}
+              style={{
+                color: "#EF4444",
+                border: "3px solid #EF4444",
+                boxShadow: `inset 0 0 0 2px ${PANEL}, inset 0 0 0 4px #EF4444`,
+                backgroundColor: "rgba(0,0,0,0.18)",
+                letterSpacing: "0.18em",
+                transform: "rotate(-6deg)",
+                animation: stampKey > 0 ? "wb-slam 0.45s cubic-bezier(0.2, 1.3, 0.4, 1) both" : "none",
+              }}
+              className="rounded-lg px-6 py-1 text-3xl font-black select-none"
+            >
+              CLOSED
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-3 flex-wrap">
           <LockCtx.Provider value={!renaming}>
             <LockInput
@@ -1811,20 +2082,31 @@ function ClosePlanView({ plan, setPlan }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mt-4 max-w-md">
-          {[
-            ["Prepared", `${stats.prep}/${stats.total}`],
-            ["Reviewed", `${stats.rev}/${stats.total}`],
-            ["Complete", `${stats.pct}%`],
-          ].map(([l, v]) => (
-            <div key={l}>
-              <div style={{ color: TEXT }} className="text-xl font-bold">{v}</div>
-              <div style={{ color: SUBTEXT }} className="text-xs">{l}</div>
+        <div className="flex items-center gap-5 mt-4 flex-wrap">
+          <ProgressRing pct={stats.pct} />
+          <div className="grid grid-cols-3 gap-5 max-w-md">
+            <div>
+              <div style={{ color: TEXT }} className="text-xl font-bold">
+                <CountUp value={stats.prep} />/{stats.total}
+              </div>
+              <div style={{ color: SUBTEXT }} className="text-xs">Prepared</div>
             </div>
-          ))}
+            <div>
+              <div style={{ color: TEXT }} className="text-xl font-bold">
+                <CountUp value={stats.rev} />/{stats.total}
+              </div>
+              <div style={{ color: SUBTEXT }} className="text-xs">Reviewed</div>
+            </div>
+            <div>
+              <div style={{ color: TEXT }} className="text-xl font-bold">
+                <CountUp value={stats.pct} suffix="%" />
+              </div>
+              <div style={{ color: SUBTEXT }} className="text-xs">Complete</div>
+            </div>
+          </div>
         </div>
         <div style={{ backgroundColor: "rgba(0,0,0,0.25)" }} className="h-2 rounded-full mt-3 overflow-hidden">
-          <div style={{ width: `${stats.pct}%`, backgroundColor: AMBER }} className="h-full transition-all" />
+          <div style={{ width: `${stats.pct}%`, backgroundColor: AMBER }} className="h-full transition-all duration-500 ease-out" />
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
           {Object.entries(CP_STATUS).map(([k, v]) => (
@@ -2144,7 +2426,31 @@ function Ambient({ kind }) {
   return <canvas ref={ref} style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 40 }} />;
 }
 
-function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey }) {
+function Toggle({ on, onChange, label, hint }) {
+  return (
+    <button
+      onClick={() => onChange(!on)}
+      style={{ backgroundColor: PANEL, borderColor: on ? AMBER : PANEL_LINE }}
+      className="w-full flex items-center gap-3 rounded-xl border p-3 text-left hover:brightness-110 transition-all"
+    >
+      <span
+        style={{ backgroundColor: on ? AMBER : "rgba(255,255,255,0.18)" }}
+        className="relative w-10 h-6 rounded-full shrink-0 transition-colors"
+      >
+        <span
+          style={{ backgroundColor: on ? ON_ACCENT : "#fff", left: on ? 20 : 4 }}
+          className="absolute top-1 w-4 h-4 rounded-full transition-all"
+        />
+      </span>
+      <span className="flex-1 min-w-0">
+        <span style={{ color: TEXT }} className="block text-sm font-semibold">{label}</span>
+        <span style={{ color: SUBTEXT }} className="block text-xs mt-0.5">{hint}</span>
+      </span>
+    </button>
+  );
+}
+
+function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey, fx, setFx }) {
   return (
     <div>
       <SectionHeader title="Settings" subtitle="Choose a color theme and font, saved on this device" />
@@ -2193,7 +2499,7 @@ function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey }) {
               }}
               className="rounded-xl border text-left p-3 hover:brightness-110 transition-all"
             >
-              <div style={{ color: TEXT }} className="text-2xl font-semibold leading-tight">Aa 你好</div>
+              <div style={{ color: TEXT }} className="text-2xl font-semibold leading-tight">Aa Bb 123</div>
               <div style={{ color: SUBTEXT }} className="text-xs mt-1 flex items-center justify-between">
                 {f.name}
                 {active && <CheckCircle2 size={14} color={AMBER} />}
@@ -2202,6 +2508,34 @@ function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey }) {
             </button>
           );
         })}
+      </div>
+      <div style={{ color: TEXT }} className="text-sm font-bold mt-8 mb-3">Effects</div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 max-w-3xl">
+        <Toggle
+          on={fx.celebrate}
+          onChange={(v) => setFx({ celebrate: v })}
+          label="Celebration effects"
+          hint="Confetti, task shine, medals, the CLOSED stamp and month-end fireworks."
+        />
+        <Toggle
+          on={fx.ambient}
+          onChange={(v) => setFx({ ambient: v })}
+          label="Background effects"
+          hint="Falling snow, stars or petals on the Christmas, Sailor Moon and Garden themes."
+        />
+      </div>
+      <div className="mt-3">
+        <button
+          onClick={() => {
+            fireworks();
+            showStamp();
+            setTimeout(() => showBadge("Day 3 cleared", "Preview"), 500);
+          }}
+          style={{ color: AMBER, borderColor: AMBER }}
+          className="text-xs font-semibold rounded-full border px-4 py-1.5 hover:brightness-110"
+        >
+          Preview celebration
+        </button>
       </div>
     </div>
   );
@@ -2341,6 +2675,14 @@ export default function PersonalWorkbench() {
   const [tab, setTab] = useState("dashboard");
   const [closePlan, setClosePlan] = useState(null);
   const [approvers, setApprovers] = useState([]);
+  const [fx, setFxState] = useState({ ...FX });
+  const setFx = (patch) => {
+    Object.assign(FX, patch);
+    setFxState({ ...FX });
+    try {
+      localStorage.setItem(FX_KEY, JSON.stringify(FX));
+    } catch {}
+  };
   const [fontKey, setFontKeyState] = useState(savedFontKey);
   const setFontKey = (k) => {
     setFontKeyState(k);
@@ -2444,8 +2786,8 @@ export default function PersonalWorkbench() {
   return (
     <div style={{ backgroundColor: BG, fontFamily: FONT, minHeight: "100vh" }} className="w-full flex flex-col sm:flex-row">
       {(() => {
-        const fx = (THEMES.find((t) => t.key === themeKey) || {}).fx;
-        return fx ? <Ambient key={fx} kind={fx} /> : null;
+        const fxKind = (THEMES.find((t) => t.key === themeKey) || {}).fx;
+        return fxKind && fx.ambient ? <Ambient key={fxKind} kind={fxKind} /> : null;
       })()}
       {/* Sidebar */}
       <div style={{ backgroundColor: SIDEBAR, borderColor: PANEL_LINE }} className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r flex sm:flex-col sm:sticky sm:top-0 sm:h-screen sm:self-start">
@@ -2496,7 +2838,7 @@ export default function PersonalWorkbench() {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 px-5 py-5 sm:px-8 sm:py-6 overflow-auto">
+      <div id="wb-main" className="flex-1 px-5 py-5 sm:px-8 sm:py-6 overflow-auto">
         {tab === "dashboard" && (
           <DashboardView
             meetings={meetings}
@@ -2516,7 +2858,7 @@ export default function PersonalWorkbench() {
         {tab === "contacts" && <ContactsView contacts={contacts} setContacts={setContacts} />}
         {tab === "notes" && <NotesView notes={notes} setNotes={setNotes} />}
         {tab === "close" && closePlan && <ClosePlanView plan={closePlan} setPlan={setClosePlan} />}
-        {tab === "settings" && <SettingsView themeKey={themeKey} setThemeKey={setThemeKey} fontKey={fontKey} setFontKey={setFontKey} />}
+        {tab === "settings" && <SettingsView themeKey={themeKey} setThemeKey={setThemeKey} fontKey={fontKey} setFontKey={setFontKey} fx={fx} setFx={setFx} />}
         {tab === "je" && <JeTrackerView entries={entries} setEntries={setEntries} approvers={approvers} setApprovers={setApprovers} />}
       </div>
     </div>

@@ -11,3 +11,60 @@ html, body, #root {
 body {
   min-height: 100vh;
 }
+
+/* Celebration effects */
+@keyframes wb-slam {
+  0% { transform: scale(2.6) rotate(-14deg); opacity: 0; }
+  55% { transform: scale(0.9) rotate(-6deg); opacity: 1; }
+  75% { transform: scale(1.06) rotate(-6deg); }
+  100% { transform: scale(1) rotate(-6deg); opacity: 1; }
+}
+@keyframes wb-ring {
+  0% { transform: scale(0.9); opacity: 0.85; }
+  100% { transform: scale(2.8); opacity: 0; }
+}
+@keyframes wb-shake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-5px, 2px); }
+  30% { transform: translate(4px, -3px); }
+  45% { transform: translate(-3px, 2px); }
+  60% { transform: translate(2px, -1px); }
+  80% { transform: translate(-1px, 1px); }
+}
+@keyframes wb-flash {
+  0% { box-shadow: 0 0 0 0 rgba(255, 211, 77, 0); }
+  30% { box-shadow: 0 0 18px 4px rgba(255, 211, 77, 0.65); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 211, 77, 0); }
+}
+@keyframes wb-shine {
+  0% { transform: translateX(-130%) skewX(-20deg); }
+  100% { transform: translateX(380%) skewX(-20deg); }
+}
+@keyframes wb-stampfade {
+  0% { opacity: 0; transform: translateX(-50%) scale(2.6) rotate(-14deg); }
+  8% { opacity: 1; transform: translateX(-50%) scale(0.92) rotate(-6deg); }
+  12% { transform: translateX(-50%) scale(1.05) rotate(-6deg); }
+  16% { transform: translateX(-50%) scale(1) rotate(-6deg); }
+  82% { opacity: 1; transform: translateX(-50%) scale(1) rotate(-6deg); }
+  100% { opacity: 0; transform: translateX(-50%) scale(1) rotate(-6deg); }
+}
+@keyframes wb-banner {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
+  10% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
+  16% { transform: translate(-50%, -50%) scale(1); }
+  82% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.04); }
+}
+@keyframes wb-badge {
+  0% { opacity: 0; transform: translateX(50px); }
+  9% { opacity: 1; transform: translateX(0); }
+  86% { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(24px); }
+}
+@keyframes wb-check {
+  to { stroke-dashoffset: 0; }
+}
+.wb-shake { animation: wb-shake 0.4s ease-in-out; }
+@media (prefers-reduced-motion: reduce) {
+  .wb-shake { animation: none; }
+}
