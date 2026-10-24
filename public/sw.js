@@ -1,5 +1,5 @@
 // Network-first so new deploys show up immediately; cache is only an offline fallback.
-const CACHE_NAME = "personal-workbench-v8";
+const CACHE_NAME = "personal-workbench-v12";
 
 self.addEventListener("install", () => self.skipWaiting());
 

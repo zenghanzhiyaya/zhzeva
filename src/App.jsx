@@ -46,8 +46,37 @@ const THEMES = [
   { key: "lavender", name: "Lavender Gray", bg: "#555064", panel: "#645E75", line: "#7A748D", accent: "#CFC6E3", onAccent: "#3E3950", sidebar: "#444051", text: "#FFFFFF", subtext: "#CAC6D6" },
   { key: "clay", name: "Terracotta Clay", bg: "#5F4F48", panel: "#6F5D55", line: "#86726A", accent: "#E3B9A0", onAccent: "#4B3A33", sidebar: "#4B3E38", text: "#FFFFFF", subtext: "#D6C7BF" },
   { key: "oat", name: "Oat & Mocha", bg: "#57504A", panel: "#675F58", line: "#7F766E", accent: "#E4D5BC", onAccent: "#443D36", sidebar: "#463F3A", text: "#FFFFFF", subtext: "#D2CBC2" },
+  { key: "christmas", fx: "snow", name: "Christmas", bg: "#1F4D3A", panel: "#2A5F49", line: "#4A8A6C", accent: "#F6C453", onAccent: "#173B2C", sidebar: "#153427", text: "#FFFFFF", subtext: "#CBE6D6" },
+  { key: "doraemon", name: "Doraemon", bg: "#1F5E9E", panel: "#2B70B4", line: "#4E8FCB", accent: "#FFD34D", onAccent: "#12385F", sidebar: "#164A7D", text: "#FFFFFF", subtext: "#D2E6F7" },
+  { key: "moon", fx: "stars", name: "Sailor Moon", bg: "#2B2F6B", panel: "#3A3F82", line: "#5C62A6", accent: "#FF9EC7", onAccent: "#232766", sidebar: "#202458", text: "#FFFFFF", subtext: "#D8D9F3" },
+  { key: "garden", fx: "petals", name: "Garden", bg: "#4F6B34", panel: "#5E7B40", line: "#7C9B5B", accent: "#F7A8B8", onAccent: "#3A2A2E", sidebar: "#3C5227", text: "#FFFFFF", subtext: "#E1EBCB" },
   { key: "slate", name: "Smoky Slate", bg: "#3F4448", panel: "#4B5156", line: "#5F676D", accent: "#B8C4C0", onAccent: "#2C3135", sidebar: "#31353A", text: "#FFFFFF", subtext: "#B9C0C2" },
 ];
+const CJK = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif';
+const FONTS = [
+  { key: "system", name: "Segoe UI (default)", stack: `"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, ${CJK}` },
+  { key: "inter", name: "Inter", stack: `"Inter", system-ui, Arial, ${CJK}` },
+  { key: "nunito", name: "Nunito (rounded)", stack: `"Nunito", system-ui, Arial, ${CJK}` },
+  { key: "poppins", name: "Poppins", stack: `"Poppins", system-ui, Arial, ${CJK}` },
+  { key: "lora", name: "Lora (serif)", stack: `"Lora", Georgia, "Songti SC", "SimSun", serif` },
+  { key: "mono", name: "JetBrains Mono", stack: `"JetBrains Mono", ui-monospace, Consolas, ${CJK}` },
+  { key: "noto", name: "Noto Sans SC", stack: `"Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif` },
+];
+const FONT_KEY = "workbench-font";
+function applyFont(key) {
+  const f = FONTS.find((x) => x.key === key) || FONTS[0];
+  document.documentElement.style.setProperty("--wb-font", f.stack);
+  document.body.style.fontFamily = f.stack;
+}
+function savedFontKey() {
+  try {
+    return localStorage.getItem(FONT_KEY) || "system";
+  } catch {
+    return "system";
+  }
+}
+applyFont(savedFontKey());
+
 const THEME_KEY = "workbench-theme";
 
 function applyTheme(key) {
@@ -77,7 +106,7 @@ function savedThemeKey() {
 }
 applyTheme(savedThemeKey());
 
-const FONT = '"Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif';
+const FONT = "var(--wb-font)";
 
 const NAV_ITEMS = [
   { key: "dashboard", label: "Dashboard", icon: LayoutGrid },
@@ -85,11 +114,9 @@ const NAV_ITEMS = [
   { key: "todos", label: "To-Do", icon: CheckSquare },
   { key: "comms", label: "Follow-ups", icon: MessageCircle },
   { key: "tasks", label: "Tasks", icon: Layers },
-  { key: "close", label: "Close Plan", icon: CalendarDays },
   { key: "meetings", label: "Meetings", icon: Users },
   { key: "contacts", label: "Contacts", icon: Contact },
   { key: "je", label: "JE Tracker", icon: FileSpreadsheet },
-  { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
 const STORE_KEYS = {
@@ -100,6 +127,7 @@ const STORE_KEYS = {
   contacts: "workbench-contacts",
   notes: "workbench-notes",
   je: "workbench-je-tracker",
+  approvers: "workbench-je-approvers",
   close: "workbench-close-plan",
 };
 
@@ -991,12 +1019,12 @@ function AutoTextArea({ value, onChange, placeholder, minHeight }) {
 
 const entrySel = (st) => ({ ...badgeStyle(ENTRY_STATUS[st]?.color || "#A8B3C7") });
 
-function JeRow({ e, update, remove }) {
+function JeRow({ e, update, remove, approvers }) {
   const [editing, setEditing] = useState(false);
   return (
     <LockCtx.Provider value={!editing}>
       <div style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }} className="rounded-lg border p-3">
-        <div className="grid grid-cols-2 md:grid-cols-[130px_170px_170px_1fr_56px] gap-3 items-start">
+        <div className="grid grid-cols-2 md:grid-cols-[120px_150px_160px_150px_1fr_56px] gap-3 items-start">
           <LockInput
             list="entity-list"
             value={e.entity}
@@ -1018,6 +1046,17 @@ function JeRow({ e, update, remove }) {
           >
             {Object.entries(ENTRY_STATUS).map(([k, v]) => (
               <option key={k} value={k} style={OPT_STYLE}>{v.label}</option>
+            ))}
+          </select>
+          <select
+            value={e.approver || ""}
+            onChange={(ev) => update(e.id, { approver: ev.target.value })}
+            style={{ borderColor: "rgba(255,255,255,0.35)", color: TEXT, backgroundColor: "rgba(255,255,255,0.05)" }}
+            className="w-full text-sm rounded-md border px-2 py-1.5 outline-none"
+          >
+            <option value="" style={OPT_STYLE}>— Approver —</option>
+            {Array.from(new Set([...approvers, ...(e.approver ? [e.approver] : [])])).map((n) => (
+              <option key={n} value={n} style={OPT_STYLE}>{n}</option>
             ))}
           </select>
           <div className="col-span-2 md:col-span-1 order-last md:order-none">
@@ -1053,10 +1092,12 @@ function JeRow({ e, update, remove }) {
   );
 }
 
-function JeTrackerView({ entries, setEntries }) {
+function JeTrackerView({ entries, setEntries, approvers, setApprovers }) {
   const [entity, setEntity] = useState("");
   const [jid, setJid] = useState("");
   const [status, setStatus] = useState("uploading");
+  const [approver, setApprover] = useState("");
+  const [newApprover, setNewApprover] = useState("");
   const [note, setNote] = useState("");
   const [filter, setFilter] = useState("all");
 
@@ -1068,7 +1109,7 @@ function JeTrackerView({ entries, setEntries }) {
   const add = () => {
     if (!jid.trim()) return;
     setEntries([
-      { id: uid("en"), entity: entity.trim(), jid: jid.trim(), status, note: note.trim(), createdAt: todayStr() },
+      { id: uid("en"), entity: entity.trim(), jid: jid.trim(), status, approver, note: note.trim(), createdAt: todayStr() },
       ...entries,
     ]);
     setJid("");
@@ -1076,6 +1117,12 @@ function JeTrackerView({ entries, setEntries }) {
   };
   const update = (id, patch) => setEntries(entries.map((e) => (e.id === id ? { ...e, ...patch } : e)));
   const remove = (id) => setEntries(entries.filter((e) => e.id !== id));
+  const addApprover = () => {
+    const n = newApprover.trim();
+    if (!n || approvers.includes(n)) return;
+    setApprovers([...approvers, n]);
+    setNewApprover("");
+  };
 
   const counts = useMemo(() => {
     const c = { all: entries.length };
@@ -1092,12 +1139,49 @@ function JeTrackerView({ entries, setEntries }) {
       <SectionHeader title="JE Tracker" subtitle="Journal entries you've uploaded and where they stand" />
 
       <div style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }} className="rounded-xl border p-4 mb-4">
+        <div style={{ color: TEXT }} className="text-sm font-bold mb-2">Approvers</div>
+        <div className="flex flex-wrap items-center gap-2">
+          {approvers.length === 0 && (
+            <span style={{ color: SUBTEXT }} className="text-xs italic">No approvers yet. Add a name to pick it on each entry.</span>
+          )}
+          {approvers.map((n) => (
+            <span
+              key={n}
+              style={{ borderColor: "rgba(255,255,255,0.35)", backgroundColor: "rgba(255,255,255,0.05)", color: TEXT }}
+              className="text-xs font-semibold rounded-full border pl-3 pr-1.5 py-1 flex items-center gap-1.5"
+            >
+              {n}
+              <button
+                onClick={() => setApprovers(approvers.filter((x) => x !== n))}
+                title={`Remove ${n}`}
+                style={{ color: DANGER }}
+                className="opacity-70 hover:opacity-100 leading-none text-sm"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <input
+            value={newApprover}
+            onChange={(e) => setNewApprover(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addApprover()}
+            placeholder="Add approver name"
+            style={inputStyle}
+            className="text-sm rounded-md border px-2.5 py-1 outline-none w-44"
+          />
+          <button onClick={addApprover} style={{ color: AMBER }} className="text-xs font-semibold flex items-center gap-1">
+            <Plus size={12} /> Add
+          </button>
+        </div>
+      </div>
+
+      <div style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }} className="rounded-xl border p-4 mb-4">
         <datalist id="entity-list">
           {entityOptions.map((o) => (
             <option key={o} value={o} />
           ))}
         </datalist>
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
           <label className="flex flex-col gap-1">
             <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Entity</span>
             <input
@@ -1130,6 +1214,20 @@ function JeTrackerView({ entries, setEntries }) {
             >
               {Object.entries(ENTRY_STATUS).map(([k, v]) => (
                 <option key={k} value={k} style={OPT_STYLE}>{v.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Approver</span>
+            <select
+              value={approver}
+              onChange={(e) => setApprover(e.target.value)}
+              style={inputStyle}
+              className="text-sm rounded-md border px-2 py-1.5 outline-none"
+            >
+              <option value="" style={OPT_STYLE}>— None —</option>
+              {approvers.map((n) => (
+                <option key={n} value={n} style={OPT_STYLE}>{n}</option>
               ))}
             </select>
           </label>
@@ -1173,16 +1271,17 @@ function JeTrackerView({ entries, setEntries }) {
         <div className="space-y-2">
           <div
             style={{ color: SUBTEXT }}
-            className="hidden md:grid grid-cols-[130px_170px_170px_1fr_56px] gap-3 px-3 text-[11px] tracking-wide"
+            className="hidden md:grid grid-cols-[120px_150px_160px_150px_1fr_56px] gap-3 px-3 text-[11px] tracking-wide"
           >
             <span>Entity</span>
             <span>Journal ID</span>
             <span>Status</span>
+            <span>Approver</span>
             <span>Note</span>
             <span></span>
           </div>
           {shown.map((e) => (
-            <JeRow key={e.id} e={e} update={update} remove={remove} />
+            <JeRow key={e.id} e={e} update={update} remove={remove} approvers={approvers} />
           ))}
         </div>
       )}
@@ -1280,6 +1379,106 @@ function cpMatches(t, person) {
   return person === "all" || p === "All" || r === "All" || p.includes(person) || r === person;
 }
 
+const CP_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+function cpParseLabel(label) {
+  const m = (label || "").match(/([A-Za-z]+)\s+(\d{4})/);
+  if (!m) return { year: "Other", mi: 99 };
+  const mi = CP_MONTH_NAMES.findIndex((n) => n.toLowerCase().startsWith(m[1].toLowerCase().slice(0, 3)));
+  return { year: m[2], mi: mi < 0 ? 99 : mi };
+}
+
+function fireConfetti(x, y, big) {
+  if (typeof window === "undefined" || (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches)) return;
+  const canvas = document.createElement("canvas");
+  canvas.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:9999";
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  const colors = ["#F87171", "#FBBF24", "#4ADE80", "#38BDF8", "#C4A7F5", "#F9A8D4", "#FFFFFF"];
+  const n = big ? 130 : 70;
+  const ps = Array.from({ length: n }, () => {
+    const a = Math.random() * Math.PI * 2;
+    const sp = 3 + Math.random() * (big ? 10 : 7);
+    return {
+      x, y,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp - 4,
+      w: 5 + Math.random() * 5,
+      h: 3 + Math.random() * 4,
+      rot: Math.random() * 6.28,
+      vr: (Math.random() - 0.5) * 0.4,
+      c: colors[Math.floor(Math.random() * colors.length)],
+    };
+  });
+  let frame = 0;
+  const total = 95;
+  const tick = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    frame++;
+    ps.forEach((p) => {
+      p.vy += 0.25;
+      p.vx *= 0.99;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.globalAlpha = Math.max(0, 1 - frame / total);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    });
+    if (frame < total) requestAnimationFrame(tick);
+    else canvas.remove();
+  };
+  tick();
+}
+
+// Soft rounded checkbox (same look as the other input boxes) that fires confetti when checked.
+function CpCheck({ checked, onChange, person, label, bigWhenChecked }) {
+  const boxRef = useRef(null);
+  return (
+    <label className="flex flex-col items-center gap-1 cursor-pointer select-none min-w-[58px]">
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={checked}
+        onChange={(e) => {
+          onChange(e.target.checked);
+          if (e.target.checked && boxRef.current) {
+            const r = boxRef.current.getBoundingClientRect();
+            fireConfetti(r.left + r.width / 2, r.top + r.height / 2, bigWhenChecked);
+          }
+        }}
+      />
+      <span
+        ref={boxRef}
+        style={{
+          borderColor: checked ? AMBER : "rgba(255,255,255,0.35)",
+          backgroundColor: checked ? AMBER : "rgba(255,255,255,0.05)",
+          color: ON_ACCENT,
+          transform: checked ? "scale(1.08)" : "scale(1)",
+        }}
+        className="w-6 h-6 rounded-md border flex items-center justify-center transition-all duration-150"
+      >
+        {checked && <Check size={15} strokeWidth={3} />}
+      </span>
+      <span style={{ color: TEXT }} className="text-[11px] font-semibold leading-none">{person}</span>
+      <span style={{ color: SUBTEXT }} className="text-[10px] leading-none">{label}</span>
+    </label>
+  );
+}
+
+function cpDeleteMonths(setPlan, ids) {
+  setPlan((prev) => {
+    const months = prev.months.filter((m) => !ids.includes(m.id));
+    if (!months.length) return makeInitialPlan();
+    return { months, activeId: months.some((m) => m.id === prev.activeId) ? prev.activeId : months[0].id };
+  });
+}
+
 function CpEditForm({ t, onSave, onCancel, onDelete }) {
   const [d, setD] = useState({ name: t.name, cat: t.cat, day: t.day, prep: t.prep || "", rev: t.rev || "", dep: t.dep || "" });
   const set = (k) => (v) => setD((x) => ({ ...x, [k]: v }));
@@ -1342,13 +1541,12 @@ function CpTaskRow({ m, t, setState, onEdit, onDragStart, onDragEnd, dragId, onD
   const [noteOpen, setNoteOpen] = useState(note.trim().length > 0);
   const [noteEditing, setNoteEditing] = useState(note.trim().length === 0);
   const color = CP_CAT_COLOR[t.cat] || CP_CAT_COLOR.Other;
-  const chk = (key, done, person, label) => (
-    <label className="flex flex-col items-center gap-0.5 cursor-pointer select-none min-w-[58px]">
-      <input type="checkbox" checked={done} onChange={(e) => setState(key, e.target.checked)} style={{ accentColor: AMBER }} className="w-4 h-4" />
-      <span style={{ color: TEXT }} className="text-[11px] font-semibold leading-none">{person}</span>
-      <span style={{ color: SUBTEXT }} className="text-[10px] leading-none">{label}</span>
-    </label>
-  );
+  const chk = (key, done, person, label) => {
+    const isRev = key.endsWith("-r");
+    // Finishing the last required box of a task gets the bigger burst.
+    const completes = !done && (isRev || t.rev == null ? true : revDone) && (isRev ? prepDone : true);
+    return <CpCheck checked={done} onChange={(v) => setState(key, v)} person={person} label={label} bigWhenChecked={completes} />;
+  };
   return (
     <div
       ref={rowRef}
@@ -1441,8 +1639,8 @@ function CpTaskRow({ m, t, setState, onEdit, onDragStart, onDragEnd, dragId, onD
           {t.rev ? (
             chk(t.id + "-r", revDone, t.rev, "Reviewed")
           ) : (
-            <div className="flex flex-col items-center gap-0.5 min-w-[58px] opacity-50">
-              <span className="w-4 h-4 text-center text-[10px]" style={{ color: SUBTEXT }}>–</span>
+            <div className="flex flex-col items-center gap-1 min-w-[58px] opacity-50">
+              <span className="w-6 h-6 text-center text-[11px] leading-6" style={{ color: SUBTEXT }}>–</span>
               <span style={{ color: TEXT }} className="text-[11px] font-semibold leading-none">N/A</span>
               <span style={{ color: SUBTEXT }} className="text-[10px] leading-none">Reviewed</span>
             </div>
@@ -1535,14 +1733,6 @@ function ClosePlanView({ plan, setPlan }) {
     return { prep, rev, total, sc, pct: total ? Math.round(((prep + rev) / (total * 2)) * 100) : 0 };
   }, [visible, m.state]);
 
-  const monthPct = (x) => {
-    let done = 0;
-    x.tasks.forEach((t) => {
-      if (x.state[t.id + "-p"] && (t.rev == null || x.state[t.id + "-r"])) done++;
-    });
-    return x.tasks.length ? Math.round((done / x.tasks.length) * 100) : 0;
-  };
-
   const addMonth = () => {
     const label = (newLabel || "").trim();
     if (!label) return;
@@ -1552,12 +1742,8 @@ function ClosePlanView({ plan, setPlan }) {
     setFilter("all");
   };
   const removeMonth = () => {
-    if (plan.months.length === 1) return;
     if (!window.confirm(`Delete "${m.label}"? This cannot be undone.`)) return;
-    setPlan((prev) => {
-      const months = prev.months.filter((x) => x.id !== m.id);
-      return { months, activeId: months[0].id };
-    });
+    cpDeleteMonths(setPlan, [m.id]);
   };
   const addTask = (day) => {
     const t = { id: uid("t"), day, cat: "Fixed Assets", name: "", prep: "Eva", rev: "Liz", dep: null };
@@ -1600,30 +1786,6 @@ function ClosePlanView({ plan, setPlan }) {
         }
       />
 
-      <div className="flex gap-2 flex-wrap mb-4">
-        {plan.months.map((x) => {
-          const active = x.id === m.id;
-          return (
-            <button
-              key={x.id}
-              onClick={() => {
-                setPlan((prev) => ({ ...prev, activeId: x.id }));
-                setEditingId(null);
-                setFilter("all");
-              }}
-              style={{
-                backgroundColor: active ? AMBER : "transparent",
-                color: active ? ON_ACCENT : SUBTEXT,
-                borderColor: active ? AMBER : PANEL_LINE,
-              }}
-              className="text-xs font-semibold rounded-full border px-3 py-1"
-            >
-              {x.label} · {monthPct(x)}%
-            </button>
-          );
-        })}
-      </div>
-
       <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-xl p-4 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
           <LockCtx.Provider value={!renaming}>
@@ -1634,11 +1796,9 @@ function ClosePlanView({ plan, setPlan }) {
             />
           </LockCtx.Provider>
           <EditToggle editing={renaming} onClick={() => setRenaming((v) => !v)} />
-          {plan.months.length > 1 && (
-            <IconBtn danger onClick={removeMonth}>
-              <Trash2 size={15} />
-            </IconBtn>
-          )}
+          <IconBtn danger onClick={removeMonth}>
+            <Trash2 size={15} />
+          </IconBtn>
           <div className="ml-auto flex items-center gap-2">
             <span style={{ color: SUBTEXT }} className="text-xs">Day 1 of close</span>
             <input
@@ -1799,10 +1959,195 @@ function ClosePlanView({ plan, setPlan }) {
 // ---------------------------------------------------------------------------
 // Settings (theme colors)
 // ---------------------------------------------------------------------------
-function SettingsView({ themeKey, setThemeKey }) {
+function CloseTree({ plan, tab, setTab, setPlan }) {
+  const [open, setOpen] = useState(false);
+  const [yearsOpen, setYearsOpen] = useState({});
+  const active = tab === "close";
+  const groups = useMemo(() => {
+    const map = {};
+    plan.months.forEach((m) => {
+      const { year, mi } = cpParseLabel(m.label);
+      (map[year] = map[year] || []).push({ m, mi });
+    });
+    Object.values(map).forEach((list) => list.sort((a, b) => a.mi - b.mi));
+    return Object.keys(map)
+      .sort((a, b) => (a === "Other" ? 1 : b === "Other" ? -1 : b.localeCompare(a)))
+      .map((y) => [y, map[y]]);
+  }, [plan.months]);
+  const activeYear = cpParseLabel((plan.months.find((m) => m.id === plan.activeId) || {}).label).year;
+  return (
+    <div className="shrink-0">
+      <button
+        onClick={() => {
+          setTab("close");
+          setOpen((v) => (active ? !v : true));
+        }}
+        style={{
+          color: active ? AMBER : SUBTEXT,
+          background: active ? `radial-gradient(120px 60px at 0% 50%, ${AMBER_SOFT}, transparent)` : "transparent",
+          borderLeft: active ? `2px solid ${AMBER}` : "2px solid transparent",
+        }}
+        className="w-full flex items-center gap-2.5 px-4 py-3 text-sm font-medium whitespace-nowrap transition-all"
+      >
+        <CalendarDays size={16} />
+        Close Plan
+        <span className="ml-auto hidden sm:block">{open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
+      </button>
+      {open && (
+        <div className="hidden sm:block pb-1">
+          {groups.map(([year, list]) => {
+            const yOpen = yearsOpen[year] ?? year === activeYear;
+            return (
+              <div key={year}>
+                <div className="group flex items-center pr-3">
+                  <button
+                    onClick={() => setYearsOpen((p) => ({ ...p, [year]: !yOpen }))}
+                    style={{ color: SUBTEXT }}
+                    className="flex-1 flex items-center gap-1.5 pl-8 pr-2 py-1.5 text-xs font-semibold hover:brightness-125"
+                  >
+                    {yOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    {year}
+                    <span className="ml-auto opacity-60">{list.length}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!window.confirm(`Delete the whole year ${year} (${list.length} month${list.length !== 1 ? "s" : ""})? This cannot be undone.`)) return;
+                      cpDeleteMonths(setPlan, list.map(({ m }) => m.id));
+                    }}
+                    title={`Delete ${year}`}
+                    style={{ color: DANGER }}
+                    className="opacity-0 group-hover:opacity-80 hover:!opacity-100 transition-opacity"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                {yOpen &&
+                  list.map(({ m }) => {
+                    const on = active && plan.activeId === m.id;
+                    return (
+                      <div
+                        key={m.id}
+                        style={{ backgroundColor: on ? AMBER_SOFT : "transparent" }}
+                        className="group flex items-center pr-3"
+                      >
+                        <button
+                          onClick={() => {
+                            setPlan((prev) => ({ ...prev, activeId: m.id }));
+                            setTab("close");
+                          }}
+                          style={{ color: on ? AMBER : TEXT }}
+                          className="flex-1 min-w-0 text-left pl-12 pr-2 py-1.5 text-xs hover:brightness-125 truncate"
+                        >
+                          {m.label}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!window.confirm(`Delete "${m.label}"? This cannot be undone.`)) return;
+                            cpDeleteMonths(setPlan, [m.id]);
+                          }}
+                          title="Delete month"
+                          style={{ color: DANGER }}
+                          className="opacity-0 group-hover:opacity-80 hover:!opacity-100 transition-opacity"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    );
+                  })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Falling snow / twinkling stars / drifting petals, drawn on a click-through canvas.
+function Ambient({ kind }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const canvas = ref.current;
+    const ctx = canvas.getContext("2d");
+    let w = (canvas.width = window.innerWidth);
+    let h = (canvas.height = window.innerHeight);
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const count = kind === "snow" ? 70 : kind === "stars" ? 46 : 30;
+    const starColors = ["#FFE08A", "#FFB3D9", "#FFFFFF"];
+    const petalColors = ["#F9C5D1", "#FFFFFF", "#FBE38E", "#C8E6A0"];
+    const items = Array.from({ length: count }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      r: kind === "snow" ? 1 + Math.random() * 2.6 : kind === "stars" ? 3 + Math.random() * 5 : 4 + Math.random() * 5,
+      v: kind === "stars" ? 0.1 + Math.random() * 0.25 : 0.4 + Math.random() * 1.1,
+      d: Math.random() * Math.PI * 2,
+      rot: Math.random() * Math.PI * 2,
+      c: kind === "stars" ? pick(starColors) : kind === "petals" ? pick(petalColors) : "#FFFFFF",
+    }));
+    const star = (x, y, r) => {
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const rad = i % 2 === 0 ? r : r * 0.35;
+        const ang = (Math.PI / 4) * i - Math.PI / 2;
+        ctx.lineTo(x + Math.cos(ang) * rad, y + Math.sin(ang) * rad);
+      }
+      ctx.closePath();
+      ctx.fill();
+    };
+    let raf;
+    const onResize = () => {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    };
+    window.addEventListener("resize", onResize);
+    const tick = () => {
+      ctx.clearRect(0, 0, w, h);
+      items.forEach((f) => {
+        f.d += kind === "stars" ? 0.03 : 0.01;
+        f.y += f.v;
+        f.x += Math.sin(f.d) * (kind === "petals" ? 0.9 : 0.5);
+        f.rot += 0.02;
+        if (f.y > h + 10) {
+          f.y = -10;
+          f.x = Math.random() * w;
+        }
+        ctx.fillStyle = f.c;
+        if (kind === "snow") {
+          ctx.globalAlpha = 0.85;
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (kind === "stars") {
+          ctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(f.d * 2));
+          star(f.x, f.y, f.r);
+        } else {
+          ctx.globalAlpha = 0.85;
+          ctx.save();
+          ctx.translate(f.x, f.y);
+          ctx.rotate(f.rot);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, f.r, f.r * 0.55, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      });
+      ctx.globalAlpha = 1;
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [kind]);
+  return <canvas ref={ref} style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 40 }} />;
+}
+
+function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey }) {
   return (
     <div>
-      <SectionHeader title="Settings" subtitle="Choose a color theme — saved on this device" />
+      <SectionHeader title="Settings" subtitle="Choose a color theme and font, saved on this device" />
       <div style={{ color: TEXT }} className="text-sm font-bold mb-3">Color Theme</div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {THEMES.map((t) => {
@@ -1827,6 +2172,33 @@ function SettingsView({ themeKey, setThemeKey }) {
                 {t.name}
                 {active && <CheckCircle2 size={15} color={t.accent} />}
               </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ color: TEXT }} className="text-sm font-bold mt-8 mb-3">Font</div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {FONTS.map((f) => {
+          const active = fontKey === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFontKey(f.key)}
+              style={{
+                backgroundColor: PANEL,
+                borderColor: active ? AMBER : PANEL_LINE,
+                borderWidth: active ? 2 : 1,
+                fontFamily: f.stack,
+              }}
+              className="rounded-xl border text-left p-3 hover:brightness-110 transition-all"
+            >
+              <div style={{ color: TEXT }} className="text-2xl font-semibold leading-tight">Aa 你好</div>
+              <div style={{ color: SUBTEXT }} className="text-xs mt-1 flex items-center justify-between">
+                {f.name}
+                {active && <CheckCircle2 size={14} color={AMBER} />}
+              </div>
+              <div style={{ color: SUBTEXT }} className="text-[11px] mt-1 truncate">Close Plan 1234</div>
             </button>
           );
         })}
@@ -1950,7 +2322,7 @@ function DashboardView({ meetings, todos, tasks, comms, entries, contacts, notes
             <div className="flex flex-col gap-1.5">
               {openJe.slice(0, 6).map((e) => (
                 <div key={e.id} className="flex items-center justify-between text-sm">
-                  <span style={{ color: TEXT }} className="truncate">{e.entity || "—"} · {e.jid}</span>
+                  <span style={{ color: TEXT }} className="truncate">{e.entity || "—"} · {e.jid}{e.approver ? ` · ${e.approver}` : ""}</span>
                   <span style={{ color: ENTRY_STATUS[e.status]?.color }} className="text-xs shrink-0 ml-2">{ENTRY_STATUS[e.status]?.label}</span>
                 </div>
               ))}
@@ -1968,6 +2340,15 @@ function DashboardView({ meetings, todos, tasks, comms, entries, contacts, notes
 export default function PersonalWorkbench() {
   const [tab, setTab] = useState("dashboard");
   const [closePlan, setClosePlan] = useState(null);
+  const [approvers, setApprovers] = useState([]);
+  const [fontKey, setFontKeyState] = useState(savedFontKey);
+  const setFontKey = (k) => {
+    setFontKeyState(k);
+    applyFont(k);
+    try {
+      localStorage.setItem(FONT_KEY, k);
+    } catch {}
+  };
   const [themeKey, setThemeKeyState] = useState(savedThemeKey);
   const setThemeKey = (k) => {
     setThemeKeyState(k);
@@ -2013,6 +2394,7 @@ export default function PersonalWorkbench() {
         loadKey(STORE_KEYS.contacts, setContacts),
         loadKey(STORE_KEYS.notes, setNotes),
         loadKey(STORE_KEYS.je, setEntries),
+        loadKey(STORE_KEYS.approvers, setApprovers),
       ]);
       setLoaded(true);
     })();
@@ -2052,17 +2434,26 @@ export default function PersonalWorkbench() {
     storage.set(STORE_KEYS.close, JSON.stringify(closePlan)).catch(() => {});
   }, [closePlan, loaded]);
 
+  useEffect(() => {
+    if (!loaded) return;
+    storage.set(STORE_KEYS.approvers, JSON.stringify(approvers)).catch(() => {});
+  }, [approvers, loaded]);
+
   const openTodoCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
 
   return (
     <div style={{ backgroundColor: BG, fontFamily: FONT, minHeight: "100vh" }} className="w-full flex flex-col sm:flex-row">
+      {(() => {
+        const fx = (THEMES.find((t) => t.key === themeKey) || {}).fx;
+        return fx ? <Ambient key={fx} kind={fx} /> : null;
+      })()}
       {/* Sidebar */}
-      <div style={{ backgroundColor: SIDEBAR, borderColor: PANEL_LINE }} className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r flex sm:flex-col">
+      <div style={{ backgroundColor: SIDEBAR, borderColor: PANEL_LINE }} className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r flex sm:flex-col sm:sticky sm:top-0 sm:h-screen sm:self-start">
         <div className="px-4 py-4 hidden sm:block">
           <div style={{ color: TEXT }} className="font-bold text-base">Personal Workbench</div>
           <div style={{ color: SUBTEXT }} className="text-[11px] mt-0.5">Your daily desk</div>
         </div>
-        <nav className="flex sm:flex-col flex-1 overflow-x-auto sm:overflow-visible">
+        <nav className="flex sm:flex-col flex-1 overflow-x-auto sm:overflow-x-hidden sm:overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const active = tab === item.key;
             const Icon = item.icon;
@@ -2089,7 +2480,19 @@ export default function PersonalWorkbench() {
               </button>
             );
           })}
+          {closePlan && <CloseTree plan={closePlan} tab={tab} setTab={setTab} setPlan={setClosePlan} />}
         </nav>
+        <div className="shrink-0 flex items-center justify-end sm:px-3 sm:py-3 px-3">
+          <button
+            onClick={() => setTab("settings")}
+            title="Settings"
+            aria-label="Settings"
+            style={{ color: tab === "settings" ? AMBER : SUBTEXT, backgroundColor: tab === "settings" ? AMBER_SOFT : "transparent" }}
+            className="p-2 rounded-lg hover:brightness-125 transition-all"
+          >
+            <SettingsIcon size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Main content */}
@@ -2113,8 +2516,8 @@ export default function PersonalWorkbench() {
         {tab === "contacts" && <ContactsView contacts={contacts} setContacts={setContacts} />}
         {tab === "notes" && <NotesView notes={notes} setNotes={setNotes} />}
         {tab === "close" && closePlan && <ClosePlanView plan={closePlan} setPlan={setClosePlan} />}
-        {tab === "settings" && <SettingsView themeKey={themeKey} setThemeKey={setThemeKey} />}
-        {tab === "je" && <JeTrackerView entries={entries} setEntries={setEntries} />}
+        {tab === "settings" && <SettingsView themeKey={themeKey} setThemeKey={setThemeKey} fontKey={fontKey} setFontKey={setFontKey} />}
+        {tab === "je" && <JeTrackerView entries={entries} setEntries={setEntries} approvers={approvers} setApprovers={setApprovers} />}
       </div>
     </div>
   );
