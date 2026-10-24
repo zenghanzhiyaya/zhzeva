@@ -2671,6 +2671,79 @@ function DashboardView({ meetings, todos, tasks, comms, entries, contacts, notes
 // ---------------------------------------------------------------------------
 // Root component
 // ---------------------------------------------------------------------------
+// Sidebar title and subtitle that can be renamed; saved on this device.
+const BRAND_KEY = "workbench-brand";
+function BrandHeader() {
+  const [brand, setBrand] = useState(() => {
+    try {
+      const b = JSON.parse(localStorage.getItem(BRAND_KEY) || "null");
+      if (b && typeof b.title === "string") return b;
+    } catch (e) {}
+    return { title: "Personal Workbench", sub: "Your daily desk" };
+  });
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(brand);
+  useEffect(() => {
+    document.title = brand.title || "Personal Workbench";
+  }, [brand.title]);
+  const save = () => {
+    const next = { title: draft.title.trim() || "Personal Workbench", sub: draft.sub.trim() };
+    setBrand(next);
+    try { localStorage.setItem(BRAND_KEY, JSON.stringify(next)); } catch (e) {}
+    setEditing(false);
+  };
+  const inputStyle = { color: TEXT, borderColor: PANEL_LINE, backgroundColor: "rgba(0,0,0,0.15)" };
+  const onKey = (e) => {
+    if (e.key === "Enter") save();
+    if (e.key === "Escape") setEditing(false);
+  };
+  return (
+    <div className="px-4 py-4 hidden sm:block group">
+      {editing ? (
+        <div className="space-y-1.5">
+          <input
+            autoFocus
+            value={draft.title}
+            maxLength={40}
+            onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+            onKeyDown={onKey}
+            placeholder="Name"
+            style={inputStyle}
+            className="w-full text-sm font-bold rounded-md border px-2 py-1 outline-none"
+          />
+          <input
+            value={draft.sub}
+            maxLength={60}
+            onChange={(e) => setDraft({ ...draft, sub: e.target.value })}
+            onKeyDown={onKey}
+            placeholder="Subtitle"
+            style={inputStyle}
+            className="w-full text-[11px] rounded-md border px-2 py-1 outline-none"
+          />
+          <button onClick={save} style={{ color: AMBER }} className="text-[11px] font-semibold inline-flex items-center gap-1">
+            <Check size={12} /> Save
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div style={{ color: TEXT }} className="font-bold text-base break-words">{brand.title}</div>
+            {brand.sub && <div style={{ color: SUBTEXT }} className="text-[11px] mt-0.5 break-words">{brand.sub}</div>}
+          </div>
+          <button
+            title="Rename"
+            onClick={() => { setDraft(brand); setEditing(true); }}
+            style={{ color: SUBTEXT }}
+            className="opacity-50 hover:opacity-100 group-hover:opacity-100 mt-1 shrink-0"
+          >
+            <Pencil size={12} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PersonalWorkbench() {
   const [tab, setTab] = useState("dashboard");
   const [closePlan, setClosePlan] = useState(null);
@@ -2791,10 +2864,7 @@ export default function PersonalWorkbench() {
       })()}
       {/* Sidebar */}
       <div style={{ backgroundColor: SIDEBAR, borderColor: PANEL_LINE }} className="sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r flex sm:flex-col sm:sticky sm:top-0 sm:h-screen sm:self-start">
-        <div className="px-4 py-4 hidden sm:block">
-          <div style={{ color: TEXT }} className="font-bold text-base">Personal Workbench</div>
-          <div style={{ color: SUBTEXT }} className="text-[11px] mt-0.5">Your daily desk</div>
-        </div>
+        <BrandHeader />
         <nav className="flex sm:flex-col flex-1 overflow-x-auto sm:overflow-x-hidden sm:overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const active = tab === item.key;
