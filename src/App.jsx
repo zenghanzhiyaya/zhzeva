@@ -19,6 +19,9 @@ import {
   CalendarDays,
   Pencil,
   Check,
+  Search,
+  Download,
+  Upload,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -441,46 +444,121 @@ function MeetingsView({ meetings, setMeetings }) {
 // ---------------------------------------------------------------------------
 // To-do list
 // ---------------------------------------------------------------------------
-const PRIORITIES = { high: { label: "High", color: "#F87171" }, medium: { label: "Medium", color: "#FBBF24" }, low: { label: "Low", color: "#60A5FA" } };
+const QUADS = {
+  q1: { label: "Do first", sub: "Urgent + Important", color: "#F87171" },
+  q2: { label: "Schedule", sub: "Important, not urgent", color: "#60A5FA" },
+  q3: { label: "Quick / delegate", sub: "Urgent, not important", color: "#FBBF24" },
+  q4: { label: "Park it", sub: "Not urgent, not important", color: "#94A3B8" },
+};
+const QUAD_ORDER = ["q1", "q2", "q3", "q4"];
+const QUAD_PRIORITY = { q1: "high", q2: "medium", q3: "medium", q4: "low" };
+// Older to-dos only have a priority; map it to a quadrant.
+const quadOf = (t) => t.quad || { high: "q1", medium: "q2", low: "q4" }[t.priority] || "q2";
 
-function TodoRow({ t, setTodos, toggle, remove }) {
+// Due-date status → color + label. Done items get no warning.
+const DUE_COLORS = { over: "#EF4444", today: "#F97316", soon: "#FACC15" };
+function dueInfo(t) {
+  if (!t.due || t.done) return null;
+  const d = new Date(t.due + "T00:00:00");
+  if (isNaN(d)) return null;
+  const now = new Date();
+  const days = Math.round((d - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+  if (days < 0) return { kind: "over", color: DUE_COLORS.over, label: `Overdue ${-days}d` };
+  if (days === 0) return { kind: "today", color: DUE_COLORS.today, label: "Due today" };
+  if (days === 1) return { kind: "soon", color: DUE_COLORS.soon, label: "Due tomorrow" };
+  if (days <= 3) return { kind: "soon", color: DUE_COLORS.soon, label: `Due in ${days}d` };
+  return null;
+}
+
+function TodoCard({ t, setTodos, toggle, remove, dnd }) {
   const [editing, setEditing] = useState(false);
+  const ref = useRef(null);
   const patch = (p) => setTodos((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...p } : x)));
+  const info = dueInfo(t);
+  const q = quadOf(t);
   return (
     <LockCtx.Provider value={!editing}>
-      <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-md px-3 py-2 flex items-center gap-3">
-        <button onClick={() => toggle(t.id)}>
-          {t.done ? <CheckCircle2 size={18} color={DONE} /> : <Circle size={18} color={SUBTEXT} />}
-        </button>
-        <LockInput
-          value={t.text}
-          onChange={(e) => patch({ text: e.target.value })}
-          style={{ color: t.done ? SUBTEXT : TEXT, textDecoration: t.done ? "line-through" : "none" }}
-          className="flex-1 min-w-0 text-sm rounded-md border px-2 py-1"
-        />
-        <LockInput
-          type="date"
-          value={t.due || ""}
-          onChange={(e) => patch({ due: e.target.value })}
-          style={{ color: SUBTEXT }}
-          className="text-xs shrink-0 rounded-md border px-2 py-1"
-        />
-        <select
-          value={t.priority}
-          onChange={(e) => patch({ priority: e.target.value })}
-          style={badgeStyle(PRIORITIES[t.priority].color)}
-          className="text-[11px] font-bold border rounded px-1.5 py-0.5 shrink-0 outline-none"
-        >
-          {Object.entries(PRIORITIES).map(([key, p]) => (
-            <option key={key} value={key} style={OPT_STYLE}>{p.label}</option>
-          ))}
-        </select>
-        <IconBtn onClick={() => setEditing((v) => !v)}>
-          {editing ? <Check size={16} color={AMBER} /> : <Pencil size={15} />}
-        </IconBtn>
-        <IconBtn danger onClick={() => remove(t.id)}>
-          <Trash2 size={15} />
-        </IconBtn>
+      <div
+        ref={ref}
+        onDragOver={(e) => {
+          if (dnd.dragId && dnd.dragId !== t.id) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          dnd.dropOnCard(t.id);
+        }}
+        style={{
+          borderColor: PANEL_LINE,
+          backgroundColor: "transparent",
+          opacity: dnd.dragId === t.id ? 0.4 : 1,
+        }}
+        className="border rounded-md px-2.5 py-2"
+      >
+        <div className="flex items-center gap-2">
+          <div
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", t.id);
+              if (ref.current) e.dataTransfer.setDragImage(ref.current, 20, 20);
+              dnd.start(t.id);
+            }}
+            onDragEnd={dnd.end}
+            title="Drag to another quadrant or position"
+            style={{ color: SUBTEXT }}
+            className="cursor-grab text-base leading-none select-none"
+          >
+            ⋮⋮
+          </div>
+          <button onClick={() => toggle(t.id)}>
+            {t.done ? <CheckCircle2 size={18} color={DONE} /> : <Circle size={18} color={SUBTEXT} />}
+          </button>
+          <LockInput
+            value={t.text}
+            onChange={(e) => patch({ text: e.target.value })}
+            style={{ color: t.done ? SUBTEXT : TEXT, textDecoration: t.done ? "line-through" : "none" }}
+            className="flex-1 min-w-0 text-sm rounded-md border px-2 py-1"
+          />
+          <IconBtn onClick={() => setEditing((v) => !v)}>
+            {editing ? <Check size={16} color={AMBER} /> : <Pencil size={15} />}
+          </IconBtn>
+          <IconBtn danger onClick={() => remove(t.id)}>
+            <Trash2 size={15} />
+          </IconBtn>
+        </div>
+        <div className="flex items-center gap-2 mt-1.5 pl-6 flex-wrap">
+          <LockInput
+            type="date"
+            value={t.due || ""}
+            onChange={(e) => patch({ due: e.target.value })}
+            style={{ color: SUBTEXT }}
+            className="text-xs rounded-md border px-2 py-0.5"
+          />
+          {info && (
+            <span
+              style={{ color: "#fff", backgroundColor: info.color }}
+              className="text-[10px] font-bold rounded-full px-2 py-0.5"
+            >
+              {info.label}
+            </span>
+          )}
+          {editing && (
+            <select
+              value={q}
+              onChange={(e) => patch({ quad: e.target.value, priority: QUAD_PRIORITY[e.target.value] })}
+              style={badgeStyle(QUADS[q].color)}
+              className="text-[11px] font-bold border rounded px-1.5 py-0.5 outline-none ml-auto"
+            >
+              {QUAD_ORDER.map((k) => (
+                <option key={k} value={k} style={OPT_STYLE}>{QUADS[k].label}</option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
     </LockCtx.Provider>
   );
@@ -489,28 +567,56 @@ function TodoRow({ t, setTodos, toggle, remove }) {
 function TodosView({ todos, setTodos }) {
   const [draft, setDraft] = useState("");
   const [due, setDue] = useState("");
-  const [priority, setPriority] = useState("medium");
+  const [quad, setQuad] = useState("q2");
   const [filter, setFilter] = useState("open"); // open | all | done
+  const [dragId, setDragId] = useState(null);
+  const [overQ, setOverQ] = useState(null);
 
   const add = () => {
     const text = draft.trim();
     if (!text) return;
-    setTodos((prev) => [{ id: uid("td"), text, done: false, priority, due }, ...prev]);
+    setTodos((prev) => [{ id: uid("td"), text, done: false, quad, priority: QUAD_PRIORITY[quad], due }, ...prev]);
     setDraft("");
     setDue("");
   };
   const toggle = (id) => setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
   const remove = (id) => setTodos((prev) => prev.filter((t) => t.id !== id));
 
+  // Move the dragged to-do into quadrant q, before `beforeId` (or to the end of the list).
+  const moveTo = (q, beforeId) => {
+    if (!dragId) return;
+    setTodos((prev) => {
+      const item = prev.find((t) => t.id === dragId);
+      if (!item) return prev;
+      const moved = { ...item, quad: q, priority: QUAD_PRIORITY[q] };
+      const rest = prev.filter((t) => t.id !== dragId);
+      const at = beforeId ? rest.findIndex((t) => t.id === beforeId) : -1;
+      if (at < 0) rest.push(moved);
+      else rest.splice(at, 0, moved);
+      return rest;
+    });
+    setDragId(null);
+    setOverQ(null);
+  };
+  const dnd = {
+    dragId,
+    start: (id) => setDragId(id),
+    end: () => {
+      setDragId(null);
+      setOverQ(null);
+    },
+    dropOnCard: (targetId) => {
+      const target = todos.find((t) => t.id === targetId);
+      if (target) moveTo(quadOf(target), targetId);
+    },
+  };
+
   const visible = todos.filter((t) => (filter === "all" ? true : filter === "done" ? t.done : !t.done));
-  const sorted = [...visible].sort((a, b) => {
-    const order = { high: 0, medium: 1, low: 2 };
-    return order[a.priority] - order[b.priority];
-  });
+  const overdueCount = todos.filter((t) => dueInfo(t)?.kind === "over").length;
 
   return (
     <div>
-      <SectionHeader title="To-Do" subtitle="Manage your tasks by priority" />
+      <SectionHeader title="To-Do" subtitle="Sort tasks by urgency and impact — drag cards between quadrants" />
 
       <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-lg p-3 mb-4 flex flex-col sm:flex-row gap-2">
         <input
@@ -529,21 +635,21 @@ function TodosView({ todos, setTodos }) {
           className="text-sm rounded-md border px-2.5 py-1.5 outline-none"
         />
         <select
-          value={priority}
-          onChange={(e) => setPriority(e.target.value)}
+          value={quad}
+          onChange={(e) => setQuad(e.target.value)}
           style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" }}
           className="text-sm rounded-md border px-2.5 py-1.5 outline-none"
         >
-          <option value="high" style={OPT_STYLE}>High priority</option>
-          <option value="medium" style={OPT_STYLE}>Medium priority</option>
-          <option value="low" style={OPT_STYLE}>Low priority</option>
+          {QUAD_ORDER.map((k) => (
+            <option key={k} value={k} style={OPT_STYLE}>{QUADS[k].label} ({QUADS[k].sub})</option>
+          ))}
         </select>
         <PrimaryButton onClick={add}>
           <Plus size={15} /> Add
         </PrimaryButton>
       </div>
 
-      <div className="flex gap-2 mb-3">
+      <div className="flex gap-2 mb-3 items-center flex-wrap">
         {[
           ["open", "In Progress"],
           ["done", "Done"],
@@ -562,13 +668,61 @@ function TodosView({ todos, setTodos }) {
             {label}
           </button>
         ))}
+        <div className="ml-auto flex items-center gap-3 text-[11px]" style={{ color: SUBTEXT }}>
+          {[["Overdue", DUE_COLORS.over], ["Due today", DUE_COLORS.today], ["Next 3 days", DUE_COLORS.soon]].map(([l, c]) => (
+            <span key={l} className="inline-flex items-center gap-1">
+              <span style={{ backgroundColor: c }} className="inline-block w-2.5 h-2.5 rounded-full" /> {l}
+            </span>
+          ))}
+          {overdueCount > 0 && <span style={{ color: DUE_COLORS.over }} className="font-bold">{overdueCount} overdue</span>}
+        </div>
       </div>
 
-      {sorted.length === 0 && <EmptyState text="Nothing here yet." />}
-      <div className="flex flex-col gap-1.5">
-        {sorted.map((t) => (
-          <TodoRow key={t.id} t={t} setTodos={setTodos} toggle={toggle} remove={remove} />
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {QUAD_ORDER.map((q) => {
+          const items = visible.filter((t) => quadOf(t) === q);
+          const hot = overQ === q && dragId;
+          return (
+            <div
+              key={q}
+              onDragOver={(e) => {
+                if (!dragId) return;
+                e.preventDefault();
+                if (overQ !== q) setOverQ(q);
+              }}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget) && overQ === q) setOverQ(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                moveTo(q, null);
+              }}
+              style={{
+                borderColor: hot ? QUADS[q].color : PANEL_LINE,
+                backgroundColor: hot ? QUADS[q].color + "26" : "rgba(0,0,0,0.12)",
+                borderTopColor: QUADS[q].color,
+                borderTopWidth: 3,
+              }}
+              className="border rounded-xl p-3 min-h-[180px] transition-colors"
+            >
+              <div className="flex items-baseline gap-2 mb-2">
+                <div style={{ color: QUADS[q].color }} className="text-sm font-bold">{QUADS[q].label}</div>
+                <div style={{ color: SUBTEXT }} className="text-[11px]">{QUADS[q].sub}</div>
+                <div style={{ color: SUBTEXT }} className="text-[11px] ml-auto">{items.length}</div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {items.map((t) => (
+                  <TodoCard key={t.id} t={t} setTodos={setTodos} toggle={toggle} remove={remove} dnd={dnd} />
+                ))}
+                {items.length === 0 && (
+                  <div style={{ color: SUBTEXT, borderColor: PANEL_LINE }} className="text-xs text-center border border-dashed rounded-md py-6 opacity-70">
+                    Drop tasks here
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -2537,6 +2691,7 @@ function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey, fx, setFx })
           Preview celebration
         </button>
       </div>
+      <BackupPanel />
     </div>
   );
 }
@@ -2744,6 +2899,254 @@ function BrandHeader() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Backup: export everything to Excel (readable sheets + a hidden restore sheet)
+// ---------------------------------------------------------------------------
+const BACKUP_SETTING_KEYS = [THEME_KEY, FONT_KEY, FX_KEY, BRAND_KEY];
+const LAST_BACKUP_KEY = "workbench-last-backup";
+const readJson = (key, fallback) => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+async function exportBackup() {
+  const XLSX = await import("xlsx");
+  const lbl = (map, k) => (map[k] ? map[k].label : k || "");
+  const sheet = (rows, widths) => {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    if (rows.length) ws["!cols"] = (widths || Object.keys(rows[0]).map(() => 22)).map((w) => ({ wch: w }));
+    return ws;
+  };
+  const wb = XLSX.utils.book_new();
+  const add = (name, rows, widths) => XLSX.utils.book_append_sheet(wb, sheet(rows.length ? rows : [{ "(empty)": "" }], widths), name);
+
+  const todos = readJson(STORE_KEYS.todos, []);
+  add("To-Do", todos.map((t) => ({
+    Quadrant: QUADS[quadOf(t)].label, Task: t.text, Due: t.due || "", Done: t.done ? "Yes" : "",
+  })), [18, 50, 12, 8]);
+  add("Follow-ups", readJson(STORE_KEYS.comms, []).map((c) => ({
+    Subject: c.subject, Contact: c.contact, Status: lbl(COMM_STATUS, c.status), Date: c.date, Notes: c.notes,
+  })), [40, 22, 16, 12, 60]);
+  add("Tasks", readJson(STORE_KEYS.tasks, []).map((t) => ({
+    Title: t.title, Project: t.project, Status: lbl(TASK_STATUS, t.status), Owner: t.owner, Due: t.due, Notes: t.notes,
+  })), [36, 22, 14, 16, 12, 60]);
+  add("Meetings", readJson(STORE_KEYS.meetings, []).map((m) => ({
+    Title: m.title, Date: m.date, Attendees: m.attendees, Notes: m.notes,
+    "Action items": (m.actions || []).map((a) => `${a.done ? "[x]" : "[ ]"} ${a.text}`).join("\n"),
+  })), [30, 12, 30, 70, 50]);
+  add("Contacts", readJson(STORE_KEYS.contacts, []).map((c) => ({
+    Name: c.name, Role: c.role, "Contact info": c.contactInfo, Notes: c.notes,
+  })), [24, 24, 34, 60]);
+  add("Notes", readJson(STORE_KEYS.notes, []).map((n) => ({
+    Created: (n.createdAt || "").slice(0, 16).replace("T", " "), Note: n.text,
+  })), [18, 90]);
+  add("JE Tracker", readJson(STORE_KEYS.je, []).map((e) => ({
+    Entity: e.entity, "Journal ID": e.jid, Status: lbl(ENTRY_STATUS, e.status), Approver: e.approver, Note: e.note, Created: e.createdAt,
+  })), [16, 18, 18, 18, 50, 12]);
+  const plan = readJson(STORE_KEYS.close, null);
+  const cpRows = [];
+  (plan?.months || []).forEach((m) => {
+    m.tasks.forEach((t) => {
+      cpRows.push({
+        Month: m.label, Day: t.day, Category: t.cat, Task: t.name, "Prepared by": t.prep || "", "Reviewed by": t.rev || "",
+        Prepared: m.state[t.id + "-p"] ? "Yes" : "", Reviewed: t.rev == null ? "n/a" : m.state[t.id + "-r"] ? "Yes" : "",
+        Status: lbl(CP_STATUS, m.state[t.id + "-s"] || "not-started"),
+      });
+    });
+  });
+  add("Close Plan", cpRows, [16, 12, 18, 50, 14, 14, 10, 10, 14]);
+
+  // Hidden sheet holding the full data, used by "Import backup".
+  const data = {};
+  [...Object.values(STORE_KEYS), ...BACKUP_SETTING_KEYS].forEach((k) => {
+    const v = localStorage.getItem(k);
+    if (v !== null) data[k] = v;
+  });
+  const json = JSON.stringify({ app: "personal-workbench", version: 1, exportedAt: new Date().toISOString(), data });
+  const chunks = [];
+  for (let i = 0; i < json.length; i += 30000) chunks.push([json.slice(i, i + 30000)]);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(chunks), "_backup");
+  wb.Workbook = { Sheets: wb.SheetNames.map((n) => ({ Hidden: n === "_backup" ? 1 : 0 })) };
+
+  XLSX.writeFile(wb, `workbench-backup-${todayStr()}.xlsx`);
+  try { localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString()); } catch {}
+}
+
+async function importBackup(file) {
+  const XLSX = await import("xlsx");
+  const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const ws = wb.Sheets["_backup"];
+  if (!ws) throw new Error("This file is not a workbench backup.");
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  const parsed = JSON.parse(rows.map((r) => r[0] || "").join(""));
+  if (parsed.app !== "personal-workbench" || !parsed.data) throw new Error("This file is not a workbench backup.");
+  return parsed;
+}
+
+function BackupPanel() {
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
+  let last = "";
+  try { last = localStorage.getItem(LAST_BACKUP_KEY) || ""; } catch {}
+  const doExport = async () => {
+    setBusy(true);
+    try {
+      await exportBackup();
+      setMsg("Backup downloaded.");
+    } catch (e) {
+      setMsg("Export failed: " + e.message);
+    }
+    setBusy(false);
+  };
+  const doImport = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const b = await importBackup(file);
+      const when = b.exportedAt ? new Date(b.exportedAt).toLocaleString() : "unknown date";
+      if (!window.confirm(`Replace ALL current data with the backup from ${when}? This cannot be undone.`)) return;
+      Object.entries(b.data).forEach(([k, v]) => localStorage.setItem(k, v));
+      setMsg("Restored. Reloading…");
+      setTimeout(() => window.location.reload(), 400);
+    } catch (err) {
+      setMsg(err.message || "Import failed.");
+    }
+  };
+  const btn = "text-xs font-semibold rounded-full border px-4 py-1.5 hover:brightness-110 inline-flex items-center gap-1.5 disabled:opacity-50";
+  return (
+    <div className="mt-8">
+      <div style={{ color: TEXT }} className="text-sm font-bold mb-1">Backup</div>
+      <div style={{ color: SUBTEXT }} className="text-xs mb-3">
+        Your data lives in this browser only. Export it to an Excel file to keep a copy or move to another computer.
+        {last ? ` Last backup: ${new Date(last).toLocaleString()}.` : " No backup yet."}
+      </div>
+      <div className="flex gap-2 flex-wrap items-center">
+        <button disabled={busy} onClick={doExport} style={{ color: ON_ACCENT, backgroundColor: AMBER, borderColor: AMBER }} className={btn}>
+          <Download size={14} /> Export to Excel
+        </button>
+        <button onClick={() => fileRef.current?.click()} style={{ color: AMBER, borderColor: AMBER }} className={btn}>
+          <Upload size={14} /> Import backup
+        </button>
+        <input ref={fileRef} type="file" accept=".xlsx" onChange={doImport} className="hidden" />
+        {msg && <span style={{ color: SUBTEXT }} className="text-xs">{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Global search (/) and quick note (N)
+// ---------------------------------------------------------------------------
+function GlobalSearch({ onClose, data, go }) {
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState(0);
+  const items = useMemo(() => {
+    const out = [];
+    const push = (type, title, sub, tab, extra) => out.push({ type, title: title || "(untitled)", sub: sub || "", tab, extra, hay: `${title} ${sub}`.toLowerCase() });
+    data.notes.forEach((n) => push("Note", n.text, (n.createdAt || "").slice(0, 10), "notes"));
+    data.todos.forEach((t) => push("To-Do", t.text, [QUADS[quadOf(t)].label, t.due].filter(Boolean).join(" · "), "todos"));
+    data.tasks.forEach((t) => push("Task", t.title, [t.project, t.owner, t.notes].filter(Boolean).join(" · "), "tasks"));
+    data.comms.forEach((c) => push("Follow-up", c.subject, [c.contact, c.notes].filter(Boolean).join(" · "), "comms"));
+    data.meetings.forEach((m) => push("Meeting", m.title, [m.date, m.attendees, m.notes].filter(Boolean).join(" · "), "meetings"));
+    data.contacts.forEach((c) => push("Contact", c.name, [c.role, c.contactInfo, c.notes].filter(Boolean).join(" · "), "contacts"));
+    data.entries.forEach((e) => push("JE", `${e.entity} ${e.jid}`.trim(), [ENTRY_STATUS[e.status]?.label, e.approver, e.note].filter(Boolean).join(" · "), "je"));
+    (data.closePlan?.months || []).forEach((m) =>
+      m.tasks.forEach((t) => push("Close Plan", t.name, [m.label, t.day, t.cat, t.prep].filter(Boolean).join(" · "), "close", m.id))
+    );
+    return out;
+  }, [data]);
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const results = terms.length ? items.filter((it) => terms.every((w) => it.hay.includes(w))).slice(0, 40) : [];
+  useEffect(() => setSel(0), [q]);
+  const open = (it) => {
+    if (!it) return;
+    go(it.tab, it.extra);
+    onClose();
+  };
+  const onKey = (e) => {
+    if (e.key === "Escape") onClose();
+    else if (e.key === "ArrowDown") { e.preventDefault(); setSel((s) => Math.min(s + 1, results.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setSel((s) => Math.max(s - 1, 0)); }
+    else if (e.key === "Enter") open(results[sel]);
+  };
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-[9000] flex items-start justify-center pt-[12vh] px-4" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }} className="w-full max-w-xl rounded-xl border shadow-2xl overflow-hidden">
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b" style={{ borderColor: PANEL_LINE }}>
+          <Search size={16} color={SUBTEXT} />
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={onKey}
+            placeholder="Search notes, to-dos, tasks, JEs, contacts, close plan…"
+            style={{ color: TEXT }}
+            className="flex-1 bg-transparent outline-none text-sm"
+          />
+          <span style={{ color: SUBTEXT, borderColor: PANEL_LINE }} className="text-[10px] border rounded px-1.5 py-0.5">Esc</span>
+        </div>
+        <div className="max-h-[50vh] overflow-auto">
+          {terms.length > 0 && results.length === 0 && <div style={{ color: SUBTEXT }} className="text-sm px-4 py-6 text-center">No matches.</div>}
+          {terms.length === 0 && <div style={{ color: SUBTEXT }} className="text-sm px-4 py-6 text-center">Type to search everything. Use ↑ ↓ and Enter.</div>}
+          {results.map((it, i) => (
+            <button
+              key={i}
+              onClick={() => open(it)}
+              onMouseEnter={() => setSel(i)}
+              style={{ backgroundColor: i === sel ? AMBER_SOFT : "transparent" }}
+              className="w-full text-left px-4 py-2 flex items-center gap-3"
+            >
+              <span style={{ color: AMBER, borderColor: AMBER }} className="text-[10px] font-bold border rounded-full px-2 py-0.5 shrink-0 w-[74px] text-center">{it.type}</span>
+              <span className="min-w-0">
+                <span style={{ color: TEXT }} className="block text-sm truncate">{it.title}</span>
+                {it.sub && <span style={{ color: SUBTEXT }} className="block text-[11px] truncate">{it.sub}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuickNoteBox({ onClose, onSave }) {
+  const [text, setText] = useState("");
+  const save = () => {
+    const v = text.trim();
+    if (v) onSave(v);
+    onClose();
+  };
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-[9000] flex items-start justify-center pt-[18vh] px-4" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }} className="w-full max-w-lg rounded-xl border shadow-2xl p-3">
+        <div style={{ color: TEXT }} className="text-sm font-bold mb-2">Quick note</div>
+        <textarea
+          autoFocus
+          rows={3}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") onClose();
+            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); save(); }
+          }}
+          placeholder="Write something…  Enter to save, Shift+Enter for a new line, Esc to cancel"
+          style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" }}
+          className="w-full text-sm rounded-md border px-2.5 py-2 outline-none resize-none"
+        />
+        <div className="flex justify-end mt-2">
+          <PrimaryButton onClick={save}>Save note</PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PersonalWorkbench() {
   const [tab, setTab] = useState("dashboard");
   const [closePlan, setClosePlan] = useState(null);
@@ -2772,6 +3175,9 @@ export default function PersonalWorkbench() {
       localStorage.setItem(THEME_KEY, k);
     } catch {}
   };
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [toast, setToast] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [meetings, setMeetings] = useState([]);
   const [todos, setTodos] = useState([]);
@@ -2854,6 +3260,35 @@ export default function PersonalWorkbench() {
     storage.set(STORE_KEYS.approvers, JSON.stringify(approvers)).catch(() => {});
   }, [approvers, loaded]);
 
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = e.target;
+      const tag = el && el.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (el && el.isContentEditable)) return;
+      if (e.key === "/") {
+        e.preventDefault();
+        setNoteOpen(false);
+        setSearchOpen(true);
+      } else if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        setSearchOpen(false);
+        setNoteOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  const quickSave = (text) => {
+    setNotes((prev) => [{ id: uid("nt"), text, createdAt: new Date().toISOString() }, ...prev]);
+    setToast("Note saved");
+    setTimeout(() => setToast(""), 1800);
+  };
+  const goSearch = (tabKey, extra) => {
+    if (tabKey === "close" && extra) setClosePlan((p) => ({ ...p, activeId: extra }));
+    setTab(tabKey);
+  };
+
   const openTodoCount = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
 
   return (
@@ -2894,7 +3329,27 @@ export default function PersonalWorkbench() {
           })}
           {closePlan && <CloseTree plan={closePlan} tab={tab} setTab={setTab} setPlan={setClosePlan} />}
         </nav>
-        <div className="shrink-0 flex items-center justify-end sm:px-3 sm:py-3 px-3">
+        <div className="shrink-0 flex items-center justify-between sm:px-3 sm:py-3 px-3">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setSearchOpen(true)}
+              title="Search (/)"
+              aria-label="Search"
+              style={{ color: SUBTEXT }}
+              className="p-2 rounded-lg hover:brightness-125 transition-all"
+            >
+              <Search size={18} />
+            </button>
+            <button
+              onClick={() => setNoteOpen(true)}
+              title="Quick note (N)"
+              aria-label="Quick note"
+              style={{ color: SUBTEXT }}
+              className="p-2 rounded-lg hover:brightness-125 transition-all"
+            >
+              <Plus size={18} />
+            </button>
+          </div>
           <button
             onClick={() => setTab("settings")}
             title="Settings"
@@ -2906,6 +3361,20 @@ export default function PersonalWorkbench() {
           </button>
         </div>
       </div>
+
+      {searchOpen && (
+        <GlobalSearch
+          onClose={() => setSearchOpen(false)}
+          go={goSearch}
+          data={{ notes, todos, tasks, comms, meetings, contacts, entries, closePlan }}
+        />
+      )}
+      {noteOpen && <QuickNoteBox onClose={() => setNoteOpen(false)} onSave={quickSave} />}
+      {toast && (
+        <div style={{ backgroundColor: AMBER, color: ON_ACCENT }} className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9500] text-sm font-semibold rounded-full px-4 py-2 shadow-lg">
+          {toast}
+        </div>
+      )}
 
       {/* Main content */}
       <div id="wb-main" className="flex-1 px-5 py-5 sm:px-8 sm:py-6 overflow-auto">
