@@ -1501,9 +1501,8 @@ function cpAddBizDays(base, n) {
   }
   return d;
 }
-function cpDayBadge(day1, label) {
+function cpDayBadge(day1, off) {
   if (!day1) return "";
-  const off = CP_DAY_OFFSET[label];
   if (off === null || off === undefined) return "";
   const base = new Date(day1 + "T12:00:00");
   const short = (d) => `${CP_MONS[d.getMonth()]} ${d.getDate()}`;
@@ -1511,6 +1510,178 @@ function cpDayBadge(day1, label) {
   const d = cpAddBizDays(base, off);
   return `${CP_WDAYS[d.getDay()]}, ${short(d)}`;
 }
+// Categories and days are editable and stored on the plan; defaults apply until the first change.
+const CP_PALETTE = ["#60A5FA", "#F87171", "#C4A7F5", "#FBBF24", "#4ADE80", "#F472B6", "#2DD4BF", "#FB923C", "#A8B3C7"];
+const cpCats = (plan) => (plan && plan.cats) || CP_CATEGORIES.map((name) => ({ name, color: CP_CAT_COLOR[name] || "#A8B3C7" }));
+const cpDays = (plan) => (plan && plan.days) || CP_DAY_ORDER.map((name) => ({ name, offset: CP_DAY_OFFSET[name] === undefined ? null : CP_DAY_OFFSET[name] }));
+const cpOffsetStr = (o) => (o === null || o === undefined ? "" : Array.isArray(o) ? o.join(",") : String(o));
+function cpParseOffset(s) {
+  const v = (s || "").trim();
+  if (!v) return null;
+  const parts = v.split(/[,;]/).map((x) => x.trim());
+  const nums = parts.map((x) => (/^-?\d+$/.test(x) ? parseInt(x, 10) : NaN));
+  if (nums.some(isNaN) || nums.length > 2) return undefined;
+  return nums.length === 2 ? nums : nums[0];
+}
+
+function CpManage({ plan, setPlan }) {
+  const cats = cpCats(plan);
+  const days = cpDays(plan);
+  const [msg, setMsg] = useState("");
+  const [newCat, setNewCat] = useState("");
+  const [newDay, setNewDay] = useState("");
+  const [newDayOff, setNewDayOff] = useState("");
+  const countCat = (n) => plan.months.reduce((a, m) => a + m.tasks.filter((t) => t.cat === n).length, 0);
+  const countDay = (n) => plan.months.reduce((a, m) => a + m.tasks.filter((t) => t.day === n).length, 0);
+  const patch = (fn) => setPlan((prev) => fn({ ...prev, cats: cpCats(prev), days: cpDays(prev) }));
+  const mapTasks = (p, fn) => ({ ...p, months: p.months.map((m) => ({ ...m, tasks: m.tasks.map(fn) })) });
+  const dupe = (list, name, except) => list.some((x) => x.name.toLowerCase() === name.toLowerCase() && x.name !== except);
+
+  const renameCat = (old, name) => {
+    name = name.trim();
+    if (!name || name === old) return;
+    if (dupe(cats, name, old)) return setMsg(`"${name}" already exists.`);
+    setMsg("");
+    patch((p) => mapTasks({ ...p, cats: p.cats.map((c) => (c.name === old ? { ...c, name } : c)) }, (t) => (t.cat === old ? { ...t, cat: name } : t)));
+  };
+  const recolor = (name, color) => patch((p) => ({ ...p, cats: p.cats.map((c) => (c.name === name ? { ...c, color } : c)) }));
+  const delCat = (name) => {
+    if (countCat(name) > 0) return setMsg(`"${name}" is used by ${countCat(name)} task(s). Move or rename them first.`);
+    setMsg("");
+    patch((p) => ({ ...p, cats: p.cats.filter((c) => c.name !== name) }));
+  };
+  const addCat = () => {
+    const name = newCat.trim();
+    if (!name) return;
+    if (dupe(cats, name)) return setMsg(`"${name}" already exists.`);
+    setMsg("");
+    patch((p) => ({ ...p, cats: [...p.cats, { name, color: CP_PALETTE[p.cats.length % CP_PALETTE.length] }] }));
+    setNewCat("");
+  };
+
+  const renameDay = (old, name) => {
+    name = name.trim();
+    if (!name || name === old) return;
+    if (dupe(days, name, old)) return setMsg(`"${name}" already exists.`);
+    setMsg("");
+    patch((p) => mapTasks({ ...p, days: p.days.map((d) => (d.name === old ? { ...d, name } : d)) }, (t) => (t.day === old ? { ...t, day: name } : t)));
+  };
+  const setOffset = (name, str) => {
+    const off = cpParseOffset(str);
+    if (off === undefined) return setMsg('Offset must be a number like 2, or a range like 2,5 (business days after Day 1). Leave blank for no date.');
+    setMsg("");
+    patch((p) => ({ ...p, days: p.days.map((d) => (d.name === name ? { ...d, offset: off } : d)) }));
+  };
+  const moveDay = (name, dir) =>
+    patch((p) => {
+      const i = p.days.findIndex((d) => d.name === name);
+      const j = i + dir;
+      if (j < 0 || j >= p.days.length) return p;
+      const arr = [...p.days];
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+      return { ...p, days: arr };
+    });
+  const delDay = (name) => {
+    if (countDay(name) > 0) return setMsg(`"${name}" is used by ${countDay(name)} task(s). Move them to another day first.`);
+    setMsg("");
+    patch((p) => ({ ...p, days: p.days.filter((d) => d.name !== name) }));
+  };
+  const addDay = () => {
+    const name = newDay.trim();
+    if (!name) return;
+    const off = cpParseOffset(newDayOff);
+    if (off === undefined) return setMsg("Offset must be a number like 2, or a range like 2,5.");
+    if (dupe(days, name)) return setMsg(`"${name}" already exists.`);
+    setMsg("");
+    patch((p) => {
+      // dated days go in date order; days without a date go last
+      const arr = [...p.days];
+      const key = (o) => (Array.isArray(o) ? o[0] : o);
+      let at = arr.length;
+      if (off !== null) {
+        const nk = key(off);
+        const i = arr.findIndex((d) => d.offset !== null && d.offset !== undefined && key(d.offset) > nk);
+        if (i >= 0) at = i;
+        else {
+          at = arr.length;
+          while (at > 0 && (arr[at - 1].offset === null || arr[at - 1].offset === undefined)) at--;
+        }
+      }
+      arr.splice(at, 0, { name, offset: off });
+      return { ...p, days: arr };
+    });
+    setNewDay("");
+    setNewDayOff("");
+  };
+
+  const inp = "text-sm rounded-md border px-2 py-1 outline-none";
+  const inpSt = { borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" };
+  // Text input that commits on blur / Enter so renaming does not rewrite tasks on every keystroke.
+  const Commit = ({ value, onCommit, className, style, placeholder }) => {
+    const [v, setV] = useState(value);
+    useEffect(() => setV(value), [value]);
+    return (
+      <input
+        value={v}
+        placeholder={placeholder}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => onCommit(v)}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        style={style || inpSt}
+        className={className || inp}
+      />
+    );
+  };
+  return (
+    <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-xl p-4 mb-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <div style={{ color: TEXT }} className="text-sm font-bold mb-0.5">Categories</div>
+          <div style={{ color: SUBTEXT }} className="text-[11px] mb-2">Rename to update every task (all months). Applies to all months.</div>
+          <div className="flex flex-col gap-1.5">
+            {cats.map((c) => (
+              <div key={c.name} className="flex items-center gap-2">
+                <input type="color" value={c.color} onChange={(e) => recolor(c.name, e.target.value)} className="w-7 h-7 rounded cursor-pointer bg-transparent border-0 p-0" title="Color" />
+                <Commit value={c.name} onCommit={(v) => renameCat(c.name, v)} className={inp + " flex-1 min-w-0"} />
+                <span style={{ color: SUBTEXT }} className="text-[11px] w-14 text-right">{countCat(c.name)} task{countCat(c.name) !== 1 ? "s" : ""}</span>
+                <IconBtn danger onClick={() => delCat(c.name)}><Trash2 size={14} /></IconBtn>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 mt-2">
+            <input value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addCat()} placeholder="New category (e.g. Prepaids)" style={inpSt} className={inp + " flex-1 min-w-0"} />
+            <PrimaryButton onClick={addCat}><Plus size={14} /> Add</PrimaryButton>
+          </div>
+        </div>
+        <div>
+          <div style={{ color: TEXT }} className="text-sm font-bold mb-0.5">Days</div>
+          <div style={{ color: SUBTEXT }} className="text-[11px] mb-2">Offset = business days after Day 1 (e.g. 2, or 2,5 for a range). Blank = no date. Use ↑ ↓ to reorder.</div>
+          <div className="flex flex-col gap-1.5">
+            {days.map((d, i) => (
+              <div key={d.name} className="flex items-center gap-2">
+                <div className="flex flex-col -my-1">
+                  <button onClick={() => moveDay(d.name, -1)} disabled={i === 0} style={{ color: SUBTEXT }} className="opacity-60 hover:opacity-100 disabled:opacity-20"><ChevronUp size={13} /></button>
+                  <button onClick={() => moveDay(d.name, 1)} disabled={i === days.length - 1} style={{ color: SUBTEXT }} className="opacity-60 hover:opacity-100 disabled:opacity-20"><ChevronDown size={13} /></button>
+                </div>
+                <Commit value={d.name} onCommit={(v) => renameDay(d.name, v)} className={inp + " flex-1 min-w-0"} />
+                <Commit value={cpOffsetStr(d.offset)} placeholder="no date" onCommit={(v) => setOffset(d.name, v)} className={inp + " w-20"} />
+                <span style={{ color: SUBTEXT }} className="text-[11px] w-14 text-right">{countDay(d.name)} task{countDay(d.name) !== 1 ? "s" : ""}</span>
+                <IconBtn danger onClick={() => delDay(d.name)}><Trash2 size={14} /></IconBtn>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 mt-2">
+            <input value={newDay} onChange={(e) => setNewDay(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addDay()} placeholder="New day (e.g. Day 5)" style={inpSt} className={inp + " flex-1 min-w-0"} />
+            <input value={newDayOff} onChange={(e) => setNewDayOff(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addDay()} placeholder="offset" style={inpSt} className={inp + " w-20"} />
+            <PrimaryButton onClick={addDay}><Plus size={14} /> Add</PrimaryButton>
+          </div>
+        </div>
+      </div>
+      {msg && <div style={{ color: DANGER }} className="text-xs mt-3">{msg}</div>}
+    </div>
+  );
+}
+
 function cpMakeMonth(label) {
   return { id: uid("m"), label, day1: null, tasks: CP_DEFAULT_TASKS.map((t) => ({ ...t, dep: t.dep || null })), state: {} };
 }
@@ -1811,12 +1982,12 @@ function CpCheck({ checked, onChange, person, label, bigWhenChecked }) {
 function cpDeleteMonths(setPlan, ids) {
   setPlan((prev) => {
     const months = prev.months.filter((m) => !ids.includes(m.id));
-    if (!months.length) return makeInitialPlan();
-    return { months, activeId: months.some((m) => m.id === prev.activeId) ? prev.activeId : months[0].id };
+    if (!months.length) return { ...makeInitialPlan(), cats: prev.cats, days: prev.days };
+    return { ...prev, months, activeId: months.some((m) => m.id === prev.activeId) ? prev.activeId : months[0].id };
   });
 }
 
-function CpEditForm({ t, onSave, onCancel, onDelete }) {
+function CpEditForm({ t, onSave, onCancel, onDelete, catNames, dayNames }) {
   const [d, setD] = useState({ name: t.name, cat: t.cat, day: t.day, prep: t.prep || "", rev: t.rev || "", dep: t.dep || "" });
   const set = (k) => (v) => setD((x) => ({ ...x, [k]: v }));
   const selCls = "text-sm rounded-md border px-2.5 py-1.5 outline-none";
@@ -1828,7 +1999,7 @@ function CpEditForm({ t, onSave, onCancel, onDelete }) {
         <label className="flex flex-col gap-1">
           <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Category</span>
           <select value={d.cat} onChange={(e) => set("cat")(e.target.value)} style={selSt} className={selCls}>
-            {CP_CATEGORIES.map((c) => (
+            {(catNames.includes(t.cat) ? catNames : [...catNames, t.cat]).map((c) => (
               <option key={c} value={c} style={OPT_STYLE}>{c}</option>
             ))}
           </select>
@@ -1836,7 +2007,7 @@ function CpEditForm({ t, onSave, onCancel, onDelete }) {
         <label className="flex flex-col gap-1">
           <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Day</span>
           <select value={d.day} onChange={(e) => set("day")(e.target.value)} style={selSt} className={selCls}>
-            {CP_DAY_ORDER.map((c) => (
+            {(dayNames.includes(t.day) ? dayNames : [...dayNames, t.day]).map((c) => (
               <option key={c} value={c} style={OPT_STYLE}>{c}</option>
             ))}
           </select>
@@ -1867,7 +2038,7 @@ function CpEditForm({ t, onSave, onCancel, onDelete }) {
   );
 }
 
-function CpTaskRow({ m, t, setState, onEdit, onDragStart, onDragEnd, dragId, onDropRow, onMove }) {
+function CpTaskRow({ color, m, t, setState, onEdit, onDragStart, onDragEnd, dragId, onDropRow, onMove }) {
   const rowRef = useRef(null);
   const [hover, setHover] = useState(null); // "before" | "after" | null
   const [flash, setFlash] = useState(false);
@@ -1879,7 +2050,6 @@ function CpTaskRow({ m, t, setState, onEdit, onDragStart, onDragEnd, dragId, onD
   const note = m.state[t.id + "-n"] || "";
   const [noteOpen, setNoteOpen] = useState(note.trim().length > 0);
   const [noteEditing, setNoteEditing] = useState(note.trim().length === 0);
-  const color = CP_CAT_COLOR[t.cat] || CP_CAT_COLOR.Other;
   useEffect(() => {
     if (wasDone.current === false && allDone && fxOn()) {
       setFlash(true);
@@ -2039,6 +2209,14 @@ function ClosePlanView({ plan, setPlan }) {
   const [renaming, setRenaming] = useState(false);
 
   const m = plan.months.find((x) => x.id === plan.activeId) || plan.months[0];
+  const [manage, setManage] = useState(false);
+  const cats = cpCats(plan);
+  const dayDefs = cpDays(plan);
+  // tasks with a day that is not in the list (e.g. after a rename elsewhere) still show, at the end
+  const extraDays = [...new Set(m.tasks.map((t) => t.day))].filter((d) => !dayDefs.some((x) => x.name === d));
+  const dayNames = [...dayDefs.map((d) => d.name), ...extraDays];
+  const offsetOf = (name) => (dayDefs.find((d) => d.name === name) || {}).offset;
+  const catColor = (name) => (cats.find((c) => c.name === name) || {}).color || "#A8B3C7";
   const patchMonth = (fn) => setPlan((prev) => ({ ...prev, months: prev.months.map((x) => (x.id === m.id ? fn(x) : x)) }));
   const setState = (key, val) => patchMonth((x) => ({ ...x, state: { ...x.state, [key]: val } }));
   const updateTask = (id, patch) => patchMonth((x) => ({ ...x, tasks: x.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
@@ -2114,7 +2292,7 @@ function ClosePlanView({ plan, setPlan }) {
         [5, 10, 20].forEach((th) => {
           if (prev.ids.size < th && ids.size >= th) badges.push([`${th} tasks done`, m.label]);
         });
-        CP_DAY_ORDER.forEach((day) => {
+        dayNames.forEach((day) => {
           const list = m.tasks.filter((t) => t.day === day);
           if (!list.length) return;
           const now = list.every((t) => ids.has(t.id));
@@ -2136,7 +2314,7 @@ function ClosePlanView({ plan, setPlan }) {
     const label = (newLabel || "").trim();
     if (!label) return;
     const nm = cpMakeMonth(label);
-    setPlan((prev) => ({ months: [...prev.months, nm], activeId: nm.id }));
+    setPlan((prev) => ({ ...prev, months: [...prev.months, nm], activeId: nm.id }));
     setNewLabel(null);
     setFilter("all");
   };
@@ -2288,13 +2466,21 @@ function ClosePlanView({ plan, setPlan }) {
             {p === "all" ? "All" : p}
           </button>
         ))}
+        <button
+          onClick={() => setManage((v) => !v)}
+          style={{ color: manage ? ON_ACCENT : AMBER, backgroundColor: manage ? AMBER : "transparent", borderColor: AMBER }}
+          className="ml-auto text-xs font-semibold rounded-full border px-3 py-1 inline-flex items-center gap-1.5"
+        >
+          <Pencil size={12} /> Customize categories &amp; days
+        </button>
       </div>
+      {manage && <CpManage plan={plan} setPlan={setPlan} />}
 
       <div className="flex flex-col gap-5">
-        {CP_DAY_ORDER.map((day) => {
+        {dayNames.map((day) => {
           const tasks = visible.filter((t) => t.day === day);
           if (!tasks.length) return null;
-          const badge = cpDayBadge(m.day1, day);
+          const badge = cpDayBadge(m.day1, offsetOf(day));
           const over = dragOver === day;
           return (
             <div
@@ -2345,6 +2531,8 @@ function ClosePlanView({ plan, setPlan }) {
                   editingId === t.id ? (
                     <CpEditForm
                       key={t.id}
+                      catNames={cats.map((c) => c.name)}
+                      dayNames={dayNames}
                       t={t}
                       onSave={(patch) => {
                         updateTask(t.id, patch);
@@ -2359,6 +2547,7 @@ function ClosePlanView({ plan, setPlan }) {
                   ) : (
                     <CpTaskRow
                       key={t.id}
+                      color={catColor(t.cat)}
                       m={m}
                       t={t}
                       setState={setState}
@@ -2381,7 +2570,7 @@ function ClosePlanView({ plan, setPlan }) {
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-6">
-        {Object.entries(CP_CAT_COLOR).map(([k, c]) => (
+        {cats.map(({ name: k, color: c }) => (
           <span key={k} style={{ color: SUBTEXT }} className="text-xs flex items-center gap-1.5">
             <span style={{ backgroundColor: c }} className="w-2 h-2 rounded-full inline-block" />
             {k}
