@@ -57,6 +57,8 @@ const THEMES = [
   { key: "retro", name: "Retro Blue & Yellow", bg: "#2E5A78", panel: "#3A6A8B", line: "#5F8DAE", accent: "#EDB93E", onAccent: "#26384A", sidebar: "#244A63", text: "#FFF6DC", subtext: "#E3DAB8" },
   { key: "mcd", name: "Golden Arches", bg: "#A81F1F", panel: "#BB2D2B", line: "#DA564E", accent: "#FFC72C", onAccent: "#6B1010", sidebar: "#8A1717", text: "#FFFFFF", subtext: "#FBDAD5" },
   { key: "sbux", name: "Green Siren", bg: "#1E5C46", panel: "#2A7058", line: "#4C9179", accent: "#F6F2E9", onAccent: "#14412F", sidebar: "#164535", text: "#FFFFFF", subtext: "#CFE6DB" },
+  { key: "blackgold", name: "Black & Gold", bg: "#17140E", panel: "#241F15", line: "#5E4D22", accent: "#D9B44A", onAccent: "#1A1409", sidebar: "#0E0C08", text: "#FBF3DC", subtext: "#BDAA74" },
+  { key: "sakura", fx: "sakura", name: "Sakura Pink", bg: "#8E5A70", panel: "#A06A81", line: "#C890A8", accent: "#FFD3E2", onAccent: "#5A2E42", sidebar: "#744659", text: "#FFFFFF", subtext: "#F7DCE7" },
   { key: "slate", name: "Smoky Slate", bg: "#3F4448", panel: "#4B5156", line: "#5F676D", accent: "#B8C4C0", onAccent: "#2C3135", sidebar: "#31353A", text: "#FFFFFF", subtext: "#B9C0C2" },
 ];
 const CJK = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif';
@@ -2705,7 +2707,7 @@ function Ambient({ kind }) {
     const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
     const count = kind === "snow" ? 70 : kind === "stars" ? 46 : 30;
     const starColors = ["#FFE08A", "#FFB3D9", "#FFFFFF"];
-    const petalColors = ["#F9C5D1", "#FFFFFF", "#FBE38E", "#C8E6A0"];
+    const petalColors = kind === "sakura" ? ["#FFD3E2", "#FFE9F0", "#FFFFFF", "#F8A9C4"] : ["#F9C5D1", "#FFFFFF", "#FBE38E", "#C8E6A0"];
     const items = Array.from({ length: count }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
@@ -2713,7 +2715,7 @@ function Ambient({ kind }) {
       v: kind === "stars" ? 0.1 + Math.random() * 0.25 : 0.4 + Math.random() * 1.1,
       d: Math.random() * Math.PI * 2,
       rot: Math.random() * Math.PI * 2,
-      c: kind === "stars" ? pick(starColors) : kind === "petals" ? pick(petalColors) : "#FFFFFF",
+      c: kind === "stars" ? pick(starColors) : (kind === "petals" || kind === "sakura") ? pick(petalColors) : "#FFFFFF",
     }));
     const star = (x, y, r) => {
       ctx.beginPath();
@@ -2736,7 +2738,7 @@ function Ambient({ kind }) {
       items.forEach((f) => {
         f.d += kind === "stars" ? 0.03 : 0.01;
         f.y += f.v;
-        f.x += Math.sin(f.d) * (kind === "petals" ? 0.9 : 0.5);
+        f.x += Math.sin(f.d) * ((kind === "petals" || kind === "sakura") ? 0.9 : 0.5);
         f.rot += 0.02;
         if (f.y > h + 10) {
           f.y = -10;
@@ -2869,7 +2871,7 @@ function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey, fx, setFx })
           on={fx.ambient}
           onChange={(v) => setFx({ ambient: v })}
           label="Background effects"
-          hint="Falling snow, stars or petals on the Christmas, Sailor Moon and Garden themes."
+          hint="Falling snow, stars or petals on the Christmas, Sailor Moon, Garden and Sakura themes."
         />
       </div>
       <div className="mt-3">
@@ -2948,8 +2950,8 @@ function ProgressRingBig({ pct, prep, rev, total }) {
   const done = pct >= 100;
   const col = done ? "#FFD34D" : AMBER;
   return (
-    <div className="flex items-center gap-5">
-      <svg width="160" height="160" viewBox="0 0 160 160" className="shrink-0">
+    <div className="flex items-center gap-5 flex-wrap">
+      <svg viewBox="0 0 160 160" className="shrink-0 w-[230px] h-[230px]">
         <defs>
           <filter id="wb-glow" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="3.5" result="b" />
