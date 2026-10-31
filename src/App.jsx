@@ -2665,6 +2665,11 @@ function CloseTree({ plan, tab, setTab, setPlan }) {
                         >
                           {m.label}
                         </button>
+                        {m.tasks.length > 0 && m.tasks.every((t) => cpIsDone(m, t)) && (
+                          <span title="Month closed" className="mr-1.5 shrink-0 inline-flex">
+                            <CheckCircle2 size={14} color="#4ADE80" />
+                          </span>
+                        )}
                         <button
                           onClick={() => {
                             if (!window.confirm(`Delete "${m.label}"? This cannot be undone.`)) return;
@@ -2888,7 +2893,402 @@ function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey, fx, setFx })
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
-function DashboardView({ meetings, todos, tasks, comms, entries, contacts, notes, goTo }) {
+// ---------------------------------------------------------------------------
+// Dashboard charts (plain SVG/HTML, theme-aware)
+// ---------------------------------------------------------------------------
+const TRACK = "rgba(255,255,255,0.12)";
+const GRID = "rgba(255,255,255,0.08)";
+const cpIsDone = (m, t) => !!m.state[t.id + "-p"] && (t.rev == null || !!m.state[t.id + "-r"]);
+const shortDay = (d) => d.replace("Preclose", "Pre").replace("Post Close", "Post").replace("Day ", "D");
+
+// Monotone cubic path through points (never overshoots, so a cumulative curve never dips).
+function smoothPath(pts) {
+  if (pts.length < 2) return "";
+  const n = pts.length;
+  const dx = [], m = [], t = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx.push(pts[i + 1][0] - pts[i][0]);
+    m.push((pts[i + 1][1] - pts[i][1]) / (pts[i + 1][0] - pts[i][0]));
+  }
+  t.push(m[0]);
+  for (let i = 1; i < n - 1; i++) t.push(m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2);
+  t.push(m[n - 2]);
+  for (let i = 0; i < n - 1; i++) {
+    if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+    const a = t[i] / m[i], b = t[i + 1] / m[i], s = a * a + b * b;
+    if (s > 9) { const k = 3 / Math.sqrt(s); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+  }
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i] / 3;
+    d += ` C${pts[i][0] + h},${pts[i][1] + t[i] * h} ${pts[i + 1][0] - h},${pts[i + 1][1] - t[i + 1] * h} ${pts[i + 1][0]},${pts[i + 1][1]}`;
+  }
+  return d;
+}
+
+function ChartCard({ title, sub, right, children, className = "" }) {
+  return (
+    <div
+      style={{ borderColor: PANEL_LINE, background: `linear-gradient(160deg, ${PANEL}, rgba(0,0,0,0.12))`, boxShadow: "0 0 0 1px rgba(255,255,255,0.02) inset, 0 8px 24px rgba(0,0,0,0.18)" }}
+      className={"border rounded-xl p-4 relative overflow-hidden " + className}
+    >
+      <div style={{ background: `linear-gradient(90deg, transparent, ${AMBER}, transparent)`, opacity: 0.55 }} className="absolute top-0 left-6 right-6 h-px" />
+      <div className="flex items-baseline gap-2 mb-3">
+        <div style={{ color: TEXT }} className="text-sm font-bold">{title}</div>
+        {sub && <div style={{ color: SUBTEXT }} className="text-[11px]">{sub}</div>}
+        <div className="ml-auto">{right}</div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ProgressRingBig({ pct, prep, rev, total }) {
+  const R = 62, C = 2 * Math.PI * R;
+  const done = pct >= 100;
+  const col = done ? "#FFD34D" : AMBER;
+  return (
+    <div className="flex items-center gap-5">
+      <svg width="160" height="160" viewBox="0 0 160 160" className="shrink-0">
+        <defs>
+          <filter id="wb-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3.5" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        {[R + 12, R - 12].map((r) => (
+          <circle key={r} cx="80" cy="80" r={r} fill="none" stroke={GRID} strokeWidth="1" strokeDasharray="2 5" />
+        ))}
+        <circle cx="80" cy="80" r={R} fill="none" stroke={TRACK} strokeWidth="10" />
+        <circle
+          cx="80" cy="80" r={R} fill="none" stroke={col} strokeWidth="10" strokeLinecap="round" filter="url(#wb-glow)"
+          strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(pct, 100) / 100)} transform="rotate(-90 80 80)"
+          style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.22,1,0.36,1)" }}
+        />
+        <text x="80" y="82" textAnchor="middle" fill={TEXT} style={{ fontSize: 34, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{pct}<tspan style={{ fontSize: 16 }}>%</tspan></text>
+        <text x="80" y="102" textAnchor="middle" fill={SUBTEXT} style={{ fontSize: 10, letterSpacing: "0.12em" }}>COMPLETE</text>
+      </svg>
+      <div className="flex flex-col gap-3 min-w-0">
+        {[["Prepared", prep], ["Reviewed", rev]].map(([l, v]) => (
+          <div key={l}>
+            <div className="flex items-baseline gap-1.5">
+              <span style={{ color: TEXT, fontVariantNumeric: "tabular-nums" }} className="text-xl font-bold">{v}</span>
+              <span style={{ color: SUBTEXT }} className="text-xs">/ {total} {l.toLowerCase()}</span>
+            </div>
+            <div style={{ backgroundColor: TRACK }} className="h-1.5 rounded-full w-36 mt-1 overflow-hidden">
+              <div style={{ width: `${total ? (v / total) * 100 : 0}%`, backgroundColor: col, transition: "width 0.8s ease-out" }} className="h-full rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Planned vs actual cumulative completion, by close day.
+function PlanCurve({ rows, todayIdx }) {
+  const [hover, setHover] = useState(null);
+  const W = 640, H = 230, L = 34, R = 16, T = 18, B = 34;
+  const max = Math.max(1, ...rows.map((r) => r.plan));
+  const nice = Math.max(4, Math.ceil(max / 4) * 4);
+  const x = (i) => L + (rows.length === 1 ? 0 : (i * (W - L - R)) / (rows.length - 1));
+  const y = (v) => T + (1 - v / nice) * (H - T - B);
+  const planPts = rows.map((r, i) => [x(i), y(r.plan)]);
+  const donePts = rows.map((r, i) => [x(i), y(r.done)]);
+  const planD = smoothPath(planPts);
+  const doneD = smoothPath(donePts);
+  const area = (d, pts) => `${d} L${pts[pts.length - 1][0]},${y(0)} L${pts[0][0]},${y(0)} Z`;
+  const onMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const px = ((e.clientX - r.left) / r.width) * W;
+    let best = 0;
+    rows.forEach((_, i) => { if (Math.abs(x(i) - px) < Math.abs(x(best) - px)) best = i; });
+    setHover(best);
+  };
+  const hr = hover !== null ? rows[hover] : null;
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" onMouseMove={onMove} onMouseLeave={() => setHover(null)} role="img" aria-label="Planned versus completed tasks by close day">
+        <defs>
+          <linearGradient id="wb-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={AMBER} stopOpacity="0.45" />
+            <stop offset="100%" stopColor={AMBER} stopOpacity="0" />
+          </linearGradient>
+          <filter id="wb-line-glow" x="-10%" y="-30%" width="120%" height="160%">
+            <feGaussianBlur stdDeviation="2.5" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+          <g key={f}>
+            <line x1={L} x2={W - R} y1={y(nice * f)} y2={y(nice * f)} stroke={GRID} strokeWidth="1" />
+            <text x={L - 6} y={y(nice * f) + 3} textAnchor="end" fill={SUBTEXT} style={{ fontSize: 9 }}>{Math.round(nice * f)}</text>
+          </g>
+        ))}
+        {rows.map((r, i) => (
+          <text key={r.name} x={x(i)} y={H - 14} textAnchor="middle" fill={hover === i ? TEXT : SUBTEXT} style={{ fontSize: 10, fontWeight: hover === i ? 700 : 400 }}>{shortDay(r.name)}</text>
+        ))}
+        <path d={area(planD, planPts)} fill={TRACK} opacity="0.35" />
+        <path d={planD} fill="none" stroke={SUBTEXT} strokeWidth="2" strokeDasharray="5 5" strokeLinecap="round" />
+        <path d={area(doneD, donePts)} fill="url(#wb-area)" />
+        <path d={doneD} fill="none" stroke={AMBER} strokeWidth="2.5" strokeLinecap="round" filter="url(#wb-line-glow)" pathLength="1" style={{ strokeDasharray: 1, animation: "wb-draw 1.4s ease-out both" }} />
+        {todayIdx !== null && todayIdx >= 0 && (
+          <g>
+            <line x1={x(todayIdx)} x2={x(todayIdx)} y1={T - 4} y2={y(0)} stroke={AMBER} strokeWidth="1" strokeDasharray="3 4" opacity="0.8" />
+            <text x={x(todayIdx)} y={T - 7} textAnchor="middle" fill={AMBER} style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em" }}>TODAY</text>
+          </g>
+        )}
+        {rows.map((r, i) => (
+          <circle key={i} cx={x(i)} cy={y(r.done)} r={hover === i ? 5 : 3} fill={AMBER} stroke="var(--wb-panel)" strokeWidth="2" />
+        ))}
+        {hover !== null && <line x1={x(hover)} x2={x(hover)} y1={T} y2={y(0)} stroke={TEXT} strokeWidth="1" opacity="0.35" />}
+      </svg>
+      {hr && (
+        <div
+          style={{ backgroundColor: SIDEBAR, borderColor: PANEL_LINE, color: TEXT, left: `${(x(hover) / W) * 100}%`, top: 0, transform: `translateX(${hover > rows.length / 2 ? "-105%" : "5%"})` }}
+          className="absolute pointer-events-none border rounded-lg px-3 py-2 text-xs shadow-xl whitespace-nowrap z-10"
+        >
+          <div className="font-bold">{hr.name}{hr.badge ? <span style={{ color: SUBTEXT }} className="font-normal"> · {hr.badge}</span> : null}</div>
+          <div style={{ color: SUBTEXT }}>Planned (cumulative): <span style={{ color: TEXT }}>{hr.plan}</span></div>
+          <div style={{ color: SUBTEXT }}>Done (cumulative): <span style={{ color: AMBER }} className="font-bold">{hr.done}</span></div>
+          <div style={{ color: hr.done >= hr.plan ? "#4ADE80" : "#FB923C" }}>{hr.done >= hr.plan ? "On or ahead of plan" : `${hr.plan - hr.done} behind plan`}</div>
+        </div>
+      )}
+      <div className="flex items-center gap-4 mt-1 text-[11px]" style={{ color: SUBTEXT }}>
+        <span className="inline-flex items-center gap-1.5"><span style={{ backgroundColor: AMBER }} className="inline-block w-4 h-0.5 rounded" /> Done</span>
+        <span className="inline-flex items-center gap-1.5"><svg width="16" height="4"><line x1="0" y1="2" x2="16" y2="2" stroke={SUBTEXT} strokeWidth="2" strokeDasharray="3 3" /></svg> Planned</span>
+      </div>
+    </div>
+  );
+}
+
+// Tasks per close day: done (accent) stacked under remaining (track).
+function DayBars({ rows }) {
+  const [hover, setHover] = useState(null);
+  const W = 420, H = 210, L = 6, R = 6, T = 8, B = 22;
+  const max = Math.max(1, ...rows.map((r) => r.total));
+  const bw = Math.min(26, ((W - L - R) / rows.length) * 0.6);
+  const step = (W - L - R) / rows.length;
+  const y = (v) => T + (1 - v / max) * (H - T - B);
+  const hr = hover !== null ? rows[hover] : null;
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" onMouseLeave={() => setHover(null)} role="img" aria-label="Tasks per close day, done and remaining">
+        <line x1={L} x2={W - R} y1={y(0)} y2={y(0)} stroke={GRID} />
+        {rows.map((r, i) => {
+          const cx = L + step * i + step / 2;
+          const remH = y(r.total) , doneTop = y(r.done);
+          return (
+            <g key={r.name} onMouseEnter={() => setHover(i)} style={{ cursor: "default" }}>
+              <rect x={cx - step / 2} y={0} width={step} height={H} fill="transparent" />
+              {r.total - r.done > 0 && <rect x={cx - bw / 2} y={remH} width={bw} height={Math.max(0, doneTop - remH - (r.done ? 2 : 0))} rx="4" fill={TRACK} />}
+              {r.done > 0 && <rect x={cx - bw / 2} y={doneTop} width={bw} height={y(0) - doneTop} rx="4" fill={AMBER} opacity={hover === null || hover === i ? 1 : 0.55} />}
+              <text x={cx} y={H - 7} textAnchor="middle" fill={hover === i ? TEXT : SUBTEXT} style={{ fontSize: 9.5 }}>{shortDay(r.name)}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ color: SUBTEXT }} className="text-[11px] h-4">
+        {hr ? <><span style={{ color: TEXT }} className="font-semibold">{hr.name}</span> · {hr.done} of {hr.total} done</> : "Hover a bar for details"}
+      </div>
+    </div>
+  );
+}
+
+function HBars({ rows, empty = "Nothing to show yet." }) {
+  const max = Math.max(1, ...rows.map((r) => r.max ?? r.value));
+  if (!rows.length) return <EmptyState text={empty} />;
+  return (
+    <div className="flex flex-col gap-2">
+      {rows.map((r) => (
+        <div key={r.label} title={r.title || ""}>
+          <div className="flex items-baseline justify-between text-xs mb-0.5">
+            <span style={{ color: TEXT }} className="truncate">{r.label}</span>
+            <span style={{ color: SUBTEXT, fontVariantNumeric: "tabular-nums" }} className="shrink-0 ml-2">{r.text ?? r.value}</span>
+          </div>
+          <div style={{ backgroundColor: TRACK }} className="h-2 rounded-full overflow-hidden">
+            <div style={{ width: `${(r.value / max) * 100}%`, backgroundColor: r.color || AMBER, boxShadow: `0 0 8px ${r.color || "var(--wb-accent)"}66`, transition: "width 0.7s ease-out" }} className="h-full rounded-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SegBar({ parts }) {
+  const total = parts.reduce((a, p) => a + p.value, 0);
+  return (
+    <div>
+      <div className="flex h-3 rounded-full overflow-hidden" style={{ gap: 2 }}>
+        {total === 0 && <div style={{ backgroundColor: TRACK }} className="flex-1" />}
+        {parts.filter((p) => p.value > 0).map((p) => (
+          <div key={p.label} title={`${p.label}: ${p.value}`} style={{ width: `${(p.value / total) * 100}%`, backgroundColor: p.color }} />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
+        {parts.map((p) => (
+          <span key={p.label} style={{ color: p.value ? TEXT : SUBTEXT }} className="text-[11px] inline-flex items-center gap-1.5">
+            <span style={{ backgroundColor: p.color }} className="w-2 h-2 rounded-full inline-block" />
+            <span style={{ fontVariantNumeric: "tabular-nums" }} className="font-semibold">{p.value}</span> {p.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DashCharts({ closePlan, todos, entries, comms }) {
+  const m = closePlan ? closePlan.months.find((x) => x.id === closePlan.activeId) || closePlan.months[0] : null;
+  const todayIso = todayStr();
+
+  // ---- Close plan numbers
+  const cp = useMemo(() => {
+    if (!m) return null;
+    const dayDefs = cpDays(closePlan);
+    const cats = cpCats(closePlan);
+    const names = [...dayDefs.map((d) => d.name), ...new Set(m.tasks.map((t) => t.day))].filter((n, i, a) => a.indexOf(n) === i);
+    let cumPlan = 0, cumDone = 0;
+    const rows = names
+      .map((name) => {
+        const list = m.tasks.filter((t) => t.day === name);
+        return { name, total: list.length, done: list.filter((t) => cpIsDone(m, t)).length, off: (dayDefs.find((d) => d.name === name) || {}).offset };
+      })
+      .filter((r) => r.total > 0)
+      .map((r) => {
+        cumPlan += r.total;
+        cumDone += r.done;
+        return { ...r, plan: cumPlan, doneCum: cumDone };
+      });
+    const curveRows = rows.map((r) => ({ name: r.name, plan: r.plan, done: r.doneCum, badge: cpDayBadge(m.day1, r.off) }));
+    // where "today" sits among the dated days
+    let todayIdx = null;
+    if (m.day1) {
+      const base = new Date(m.day1 + "T12:00:00");
+      const now = new Date();
+      now.setHours(12, 0, 0, 0);
+      let n = 0;
+      const dir = now >= base ? 1 : -1;
+      const c = new Date(base);
+      while (dir === 1 ? c < now : c > now) {
+        c.setDate(c.getDate() + dir);
+        if (c.getDay() !== 0 && c.getDay() !== 6) n += dir;
+      }
+      const key = (o) => (Array.isArray(o) ? o[0] : o);
+      let idx = -1;
+      rows.forEach((r, i) => {
+        if (r.off !== null && r.off !== undefined && key(r.off) <= n) idx = i;
+      });
+      todayIdx = idx;
+    }
+    const total = m.tasks.length;
+    const prep = m.tasks.filter((t) => m.state[t.id + "-p"]).length;
+    const rev = m.tasks.filter((t) => t.rev == null || m.state[t.id + "-r"]).length;
+    const needRev = total;
+    const pct = total ? Math.round(((prep + m.tasks.filter((t) => (t.rev == null ? !!m.state[t.id + "-p"] : !!m.state[t.id + "-r"])).length) / (total * 2)) * 100) : 0;
+    const revDone = m.tasks.filter((t) => (t.rev == null ? !!m.state[t.id + "-p"] : !!m.state[t.id + "-r"])).length;
+    const byCat = cats
+      .map((c) => {
+        const list = m.tasks.filter((t) => t.cat === c.name);
+        const d = list.filter((t) => cpIsDone(m, t)).length;
+        return { label: c.name, value: d, max: list.length, text: `${d}/${list.length}`, color: c.color, n: list.length };
+      })
+      .filter((r) => r.n > 0)
+      .sort((a, b) => b.n - a.n);
+    const status = Object.entries(CP_STATUS).map(([k, v]) => ({
+      label: v.label, color: v.color, value: m.tasks.filter((t) => (m.state[t.id + "-s"] || "not-started") === k).length,
+    }));
+    const people = {};
+    m.tasks.forEach((t) => {
+      if (!m.state[t.id + "-p"]) String(t.prep || "").split("/").forEach((p) => { p = p.trim(); if (p && p.toLowerCase() !== "all" && p !== "TBD") people[p] = (people[p] || 0) + 1; });
+      if (t.rev && !m.state[t.id + "-r"]) { const p = t.rev.trim(); if (p.toLowerCase() !== "all") people[p] = (people[p] || 0) + 1; }
+    });
+    const work = Object.entries(people).map(([label, value]) => ({ label, value, text: `${value} open` })).sort((a, b) => b.value - a.value);
+    return { rows, curveRows, todayIdx, total, prep, revDone, pct, byCat, status, work, label: m.label };
+  }, [closePlan]);
+
+  // ---- JE pipeline
+  const jeRows = Object.entries(ENTRY_STATUS).map(([k, v]) => ({ label: v.label, value: entries.filter((e) => e.status === k).length, color: v.color }));
+  const jeApproved = entries.filter((e) => e.status === "approved").length;
+
+  // ---- To-Do matrix + next 7 days
+  const open = todos.filter((t) => !t.done);
+  const quadCount = Object.fromEntries(QUAD_ORDER.map((q) => [q, open.filter((t) => quadOf(t) === q).length]));
+  const quadMax = Math.max(1, ...Object.values(quadCount));
+  const week = [];
+  const overdue = open.filter((t) => t.due && t.due < todayIso).length;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    week.push({ label: i === 0 ? "Today" : CP_WDAYS[d.getDay()], n: open.filter((t) => t.due === iso).length });
+  }
+  const weekMax = Math.max(1, overdue, ...week.map((w) => w.n));
+  const commParts = Object.entries(COMM_STATUS).map(([k, v]) => ({ label: v.label, color: v.color, value: comms.filter((c) => c.status === k).length }));
+
+  return (
+    <div className="flex flex-col gap-4 mb-6">
+      {cp && (
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+          <ChartCard title="Close Plan" sub={cp.label} className="xl:col-span-2">
+            <ProgressRingBig pct={cp.pct} prep={cp.prep} rev={cp.revDone} total={cp.total} />
+            <div className="mt-4">
+              <SegBar parts={cp.status} />
+            </div>
+          </ChartCard>
+          <ChartCard title="Plan vs actual" sub="Cumulative tasks completed by close day" className="xl:col-span-3">
+            {cp.curveRows.length > 1 ? <PlanCurve rows={cp.curveRows} todayIdx={cp.todayIdx} /> : <EmptyState text="Add tasks to days to see the curve." />}
+          </ChartCard>
+        </div>
+      )}
+      {cp && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <ChartCard title="Tasks by day" sub="done vs remaining">
+            <DayBars rows={cp.rows} />
+          </ChartCard>
+          <ChartCard title="By category" sub="tasks done">
+            <HBars rows={cp.byCat} />
+          </ChartCard>
+          <ChartCard title="Open work by person" sub="to prepare + to review">
+            <HBars rows={cp.work} empty="Everything is prepared and reviewed." />
+          </ChartCard>
+        </div>
+      )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <ChartCard title="JE pipeline" sub={`${jeApproved} of ${entries.length} approved`}>
+          <HBars rows={jeRows} />
+        </ChartCard>
+        <ChartCard title="To-Do matrix" sub="open tasks" right={overdue > 0 ? <span style={{ color: "#EF4444" }} className="text-[11px] font-bold">{overdue} overdue</span> : null}>
+          <div className="grid grid-cols-2 gap-2">
+            {QUAD_ORDER.map((q) => (
+              <div
+                key={q}
+                title={`${QUADS[q].label}: ${quadCount[q]}`}
+                style={{ backgroundColor: QUADS[q].color + Math.round(20 + (quadCount[q] / quadMax) * 70).toString(16).padStart(2, "0"), borderColor: QUADS[q].color + "66" }}
+                className="border rounded-lg px-3 py-2"
+              >
+                <div style={{ color: TEXT, fontVariantNumeric: "tabular-nums" }} className="text-2xl font-bold leading-none">{quadCount[q]}</div>
+                <div style={{ color: TEXT }} className="text-[11px] mt-1 opacity-80">{QUADS[q].label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-end gap-1.5 h-14 mt-3">
+            {[{ label: "Over", n: overdue, over: true }, ...week].map((w) => (
+              <div key={w.label} className="flex-1 flex flex-col items-center justify-end h-full" title={`${w.label}: ${w.n}`}>
+                <div style={{ height: `${w.n ? Math.max(12, (w.n / weekMax) * 100) : 4}%`, backgroundColor: w.over ? "#EF4444" : w.n ? AMBER : TRACK }} className="w-full rounded-t-md" />
+                <div style={{ color: SUBTEXT }} className="text-[9px] mt-1">{w.label}</div>
+              </div>
+            ))}
+          </div>
+        </ChartCard>
+        <ChartCard title="Follow-ups" sub={`${comms.length} total`}>
+          <SegBar parts={commParts} />
+        </ChartCard>
+      </div>
+    </div>
+  );
+}
+
+function DashboardView({ meetings, todos, tasks, comms, entries, contacts, notes, closePlan, goTo }) {
   const openTodos = todos.filter((t) => !t.done);
   const todayTodos = openTodos.filter((t) => t.due === todayStr());
   const recentMeetings = meetings.slice(0, 3);
@@ -2910,20 +3310,22 @@ function DashboardView({ meetings, todos, tasks, comms, entries, contacts, notes
     <div>
       <SectionHeader title="Dashboard" subtitle="Your workspace today" />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-4">
         {stats.map((s) => (
           <button
             key={s.key}
             onClick={() => goTo(s.key)}
             style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }}
-            className="border rounded-lg p-4 text-left hover:brightness-110 transition-all"
+            className="border rounded-lg p-3 text-left hover:brightness-110 transition-all"
           >
-            <s.icon size={18} color={AMBER} />
-            <div style={{ color: TEXT }} className="text-2xl font-bold mt-2">{s.value}</div>
-            <div style={{ color: SUBTEXT }} className="text-xs mt-0.5">{s.label}</div>
+            <s.icon size={16} color={AMBER} />
+            <div style={{ color: TEXT, fontVariantNumeric: "tabular-nums" }} className="text-xl font-bold mt-1.5">{s.value}</div>
+            <div style={{ color: SUBTEXT }} className="text-[11px] mt-0.5">{s.label}</div>
           </button>
         ))}
       </div>
+
+      <DashCharts closePlan={closePlan} todos={todos} entries={entries} comms={comms} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-lg p-4">
@@ -3576,6 +3978,7 @@ export default function PersonalWorkbench() {
             entries={entries}
             contacts={contacts}
             notes={notes}
+            closePlan={closePlan}
             goTo={setTab}
           />
         )}
