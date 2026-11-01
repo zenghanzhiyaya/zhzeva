@@ -72,3 +72,35 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .wb-shake { animation: none; }
 }
+
+/* Doodle Sketchbook theme: wobbly hand-drawn borders and offset pencil shadows */
+[data-sketch] .rounded-md,
+[data-sketch] .rounded-lg,
+[data-sketch] .rounded-xl {
+  border-radius: 255px 14px 225px 14px / 14px 225px 14px 255px !important;
+}
+[data-sketch] .border,
+[data-sketch] .border-2 {
+  border-width: 2px;
+}
+[data-sketch] .border {
+  box-shadow: 2px 3px 0 rgba(43, 42, 40, 0.2);
+}
+[data-sketch] input,
+[data-sketch] textarea,
+[data-sketch] select {
+  box-shadow: none !important;
+}
+[data-sketch] .rounded-xl:nth-child(odd) { transform: rotate(-0.25deg); }
+[data-sketch] .rounded-xl:nth-child(even) { transform: rotate(0.25deg); }
+[data-sketch] body, body[style] { letter-spacing: 0.01em; }
+@media (prefers-reduced-motion: reduce) {
+  [data-sketch] .rounded-xl:nth-child(odd),
+  [data-sketch] .rounded-xl:nth-child(even) { transform: none; }
+}
+/* lighter fields on the white Doodle page */
+[data-sketch] input:not([type="checkbox"]):not([type="color"]):not([type="file"]),
+[data-sketch] textarea {
+  background-color: #FAF9F5 !important;
+}
+[data-sketch] input.wb-plain { background-color: transparent !important; }

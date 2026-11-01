@@ -59,6 +59,7 @@ const THEMES = [
   { key: "sbux", name: "Green Siren", bg: "#1E5C46", panel: "#2A7058", line: "#4C9179", accent: "#F6F2E9", onAccent: "#14412F", sidebar: "#164535", text: "#FFFFFF", subtext: "#CFE6DB" },
   { key: "blackgold", name: "Black & Gold", bg: "#17140E", panel: "#241F15", line: "#5E4D22", accent: "#D9B44A", onAccent: "#1A1409", sidebar: "#0E0C08", text: "#FBF3DC", subtext: "#BDAA74" },
   { key: "sakura", fx: "sakura", name: "Sakura Pink", bg: "#8E5A70", panel: "#A06A81", line: "#C890A8", accent: "#FFD3E2", onAccent: "#5A2E42", sidebar: "#744659", text: "#FFFFFF", subtext: "#F7DCE7" },
+  { key: "doodle", name: "Doodle Sketchbook", sketch: true, light: true, font: "hand", fx: "doodle", bg: "#FFFFFF", panel: "#FFFFFF", line: "#2B2A28", accent: "#2F4F8F", onAccent: "#FFFFFF", sidebar: "#F4F3EF", text: "#2B2A28", subtext: "#756F60" },
   { key: "slate", name: "Smoky Slate", bg: "#3F4448", panel: "#4B5156", line: "#5F676D", accent: "#B8C4C0", onAccent: "#2C3135", sidebar: "#31353A", text: "#FFFFFF", subtext: "#B9C0C2" },
 ];
 const CJK = '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif';
@@ -69,6 +70,8 @@ const FONTS = [
   { key: "poppins", name: "Poppins", stack: `"Poppins", system-ui, Arial, ${CJK}` },
   { key: "lora", name: "Lora (serif)", stack: `"Lora", Georgia, "Songti SC", "SimSun", serif` },
   { key: "mono", name: "JetBrains Mono", stack: `"JetBrains Mono", ui-monospace, Consolas, ${CJK}` },
+  { key: "hand", name: "Handwritten (Patrick Hand)", stack: `"Patrick Hand", "Comic Sans MS", "Segoe Print", cursive, ${CJK}` },
+  { key: "caveat", name: "Handwritten (Caveat)", stack: `"Caveat", "Segoe Script", "Comic Sans MS", cursive, ${CJK}` },
 ];
 const FONT_KEY = "workbench-font";
 function applyFont(key) {
@@ -101,6 +104,10 @@ function applyTheme(key) {
   set("--wb-sidebar", t.sidebar);
   set("--wb-text", t.text);
   set("--wb-subtext", t.subtext);
+  set("--wb-track", t.light ? "rgba(0,0,0,0.10)" : "rgba(255,255,255,0.12)");
+  set("--wb-grid", t.light ? "rgba(0,0,0,0.09)" : "rgba(255,255,255,0.08)");
+  if (t.sketch) root.setAttribute("data-sketch", "1");
+  else root.removeAttribute("data-sketch");
   document.body.style.backgroundColor = t.bg;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", t.bg);
@@ -179,7 +186,15 @@ function todayStr() {
 // ---------------------------------------------------------------------------
 const LockCtx = createContext(false);
 const OPT_STYLE = { color: "#111111", backgroundColor: "#FFFFFF" };
-const badgeStyle = (c) => ({ color: c, borderColor: c, backgroundColor: c + "30" });
+// In the light Doodle theme pastel status colors are darkened so text stays readable.
+const isSketch = () => typeof document !== "undefined" && document.documentElement.hasAttribute("data-sketch");
+const ink = (c) => {
+  if (!isSketch() || !/^#[0-9a-f]{6}$/i.test(c)) return c;
+  const n = parseInt(c.slice(1), 16);
+  const m = (v) => Math.round(v * 0.55).toString(16).padStart(2, "0");
+  return `#${m((n >> 16) & 255)}${m((n >> 8) & 255)}${m(n & 255)}`;
+};
+const badgeStyle = (c) => ({ color: ink(c), borderColor: ink(c), backgroundColor: c + "30" });
 const lockedStyle = (locked) =>
   locked
     ? { borderColor: "rgba(255,255,255,0.35)", backgroundColor: "rgba(255,255,255,0.05)", color: TEXT }
@@ -446,6 +461,47 @@ function MeetingsView({ meetings, setMeetings }) {
 // ---------------------------------------------------------------------------
 // To-do list
 // ---------------------------------------------------------------------------
+// Sort chips: click to sort, click the active chip again to flip direction.
+function useSort(storeKey, initial) {
+  const [sort, setSortState] = useState(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(storeKey) || "null");
+      if (v && v.key) return v;
+    } catch {}
+    return initial;
+  });
+  const setSort = (v) => {
+    setSortState(v);
+    try { localStorage.setItem(storeKey, JSON.stringify(v)); } catch {}
+  };
+  return [sort, setSort];
+}
+function SortBar({ options, sort, setSort }) {
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      <span style={{ color: SUBTEXT }} className="text-xs mr-0.5">Sort</span>
+      {options.map(([key, label, defDir]) => {
+        const on = sort.key === key;
+        return (
+          <button
+            key={key}
+            onClick={() => setSort(on && defDir ? { key, dir: -sort.dir } : { key, dir: defDir || 1 })}
+            style={{
+              backgroundColor: on ? AMBER_SOFT : "transparent",
+              color: on ? AMBER : SUBTEXT,
+              borderColor: on ? AMBER : PANEL_LINE,
+            }}
+            className="text-xs font-semibold rounded-full border px-3 py-1 inline-flex items-center gap-1"
+          >
+            {label}
+            {on && defDir ? (sort.dir === 1 ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 const QUADS = {
   q1: { label: "Do first", sub: "Urgent + Important", color: "#F87171" },
   q2: { label: "Schedule", sub: "Important, not urgent", color: "#60A5FA" },
@@ -472,7 +528,7 @@ function dueInfo(t) {
   return null;
 }
 
-function TodoCard({ t, setTodos, toggle, remove, dnd }) {
+function TodoCard({ t, setTodos, toggle, remove, dnd, flat }) {
   const [editing, setEditing] = useState(false);
   const ref = useRef(null);
   const patch = (p) => setTodos((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...p } : x)));
@@ -498,68 +554,78 @@ function TodoCard({ t, setTodos, toggle, remove, dnd }) {
           backgroundColor: "transparent",
           opacity: dnd.dragId === t.id ? 0.4 : 1,
         }}
-        className="border rounded-md px-2.5 py-2"
+        className="border rounded-md px-2.5 py-1.5"
       >
         <div className="flex items-center gap-2">
-          <div
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.effectAllowed = "move";
-              e.dataTransfer.setData("text/plain", t.id);
-              if (ref.current) e.dataTransfer.setDragImage(ref.current, 20, 20);
-              dnd.start(t.id);
-            }}
-            onDragEnd={dnd.end}
-            title="Drag to another quadrant or position"
-            style={{ color: SUBTEXT }}
-            className="cursor-grab text-base leading-none select-none"
-          >
-            ⋮⋮
-          </div>
-          <button onClick={() => toggle(t.id)}>
+          {!flat && (
+            <div
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", t.id);
+                if (ref.current) e.dataTransfer.setDragImage(ref.current, 20, 20);
+                dnd.start(t.id);
+              }}
+              onDragEnd={dnd.end}
+              title="Drag to another quadrant or position"
+              style={{ color: SUBTEXT }}
+              className="cursor-grab text-base leading-none select-none"
+            >
+              ⋮⋮
+            </div>
+          )}
+          <button onClick={() => toggle(t.id)} className="shrink-0">
             {t.done ? <CheckCircle2 size={18} color={DONE} /> : <Circle size={18} color={SUBTEXT} />}
           </button>
           <LockInput
             value={t.text}
             onChange={(e) => patch({ text: e.target.value })}
-            style={{ color: t.done ? SUBTEXT : TEXT, textDecoration: t.done ? "line-through" : "none" }}
-            className="flex-1 min-w-0 text-sm rounded-md border px-2 py-1"
+            style={{
+              color: t.done ? SUBTEXT : TEXT,
+              textDecoration: t.done ? "line-through" : "none",
+              ...(editing ? {} : { border: "none", backgroundColor: "transparent", padding: "2px 4px", boxShadow: "none" }),
+            }}
+            className={"flex-1 min-w-0 text-sm px-2 py-1 " + (editing ? "rounded-md border" : "wb-plain")}
           />
+          {flat && (
+            <span style={badgeStyle(QUADS[q].color)} className="text-[10px] font-bold border rounded-full px-2 py-0.5 shrink-0 whitespace-nowrap">
+              {QUADS[q].label}
+            </span>
+          )}
+          {info && (
+            <span style={{ color: "#fff", backgroundColor: info.color }} className="text-[10px] font-bold rounded-full px-2 py-0.5 shrink-0 whitespace-nowrap">
+              {info.label}
+            </span>
+          )}
+          {editing ? (
+            <>
+              <input
+                type="date"
+                value={t.due || ""}
+                onChange={(e) => patch({ due: e.target.value })}
+                style={{ color: SUBTEXT, borderColor: PANEL_LINE, backgroundColor: "rgba(0,0,0,0.15)" }}
+                className="text-xs shrink-0 rounded-md border px-1.5 py-0.5 outline-none"
+              />
+              <select
+                value={q}
+                onChange={(e) => patch({ quad: e.target.value, priority: QUAD_PRIORITY[e.target.value] })}
+                style={badgeStyle(QUADS[q].color)}
+                className="text-[11px] font-bold border rounded px-1.5 py-0.5 outline-none shrink-0"
+              >
+                {QUAD_ORDER.map((k) => (
+                  <option key={k} value={k} style={OPT_STYLE}>{QUADS[k].label}</option>
+                ))}
+              </select>
+            </>
+          ) : (
+            t.due && <span style={{ color: SUBTEXT }} className="text-xs shrink-0 whitespace-nowrap">{t.due.slice(5).replace("-", "/")}</span>
+          )}
           <IconBtn onClick={() => setEditing((v) => !v)}>
             {editing ? <Check size={16} color={AMBER} /> : <Pencil size={15} />}
           </IconBtn>
           <IconBtn danger onClick={() => remove(t.id)}>
             <Trash2 size={15} />
           </IconBtn>
-        </div>
-        <div className="flex items-center gap-2 mt-1.5 pl-6 flex-wrap">
-          <LockInput
-            type="date"
-            value={t.due || ""}
-            onChange={(e) => patch({ due: e.target.value })}
-            style={{ color: SUBTEXT }}
-            className="text-xs rounded-md border px-2 py-0.5"
-          />
-          {info && (
-            <span
-              style={{ color: "#fff", backgroundColor: info.color }}
-              className="text-[10px] font-bold rounded-full px-2 py-0.5"
-            >
-              {info.label}
-            </span>
-          )}
-          {editing && (
-            <select
-              value={q}
-              onChange={(e) => patch({ quad: e.target.value, priority: QUAD_PRIORITY[e.target.value] })}
-              style={badgeStyle(QUADS[q].color)}
-              className="text-[11px] font-bold border rounded px-1.5 py-0.5 outline-none ml-auto"
-            >
-              {QUAD_ORDER.map((k) => (
-                <option key={k} value={k} style={OPT_STYLE}>{QUADS[k].label}</option>
-              ))}
-            </select>
-          )}
         </div>
       </div>
     </LockCtx.Provider>
@@ -573,6 +639,7 @@ function TodosView({ todos, setTodos }) {
   const [filter, setFilter] = useState("open"); // open | all | done
   const [dragId, setDragId] = useState(null);
   const [overQ, setOverQ] = useState(null);
+  const [sort, setSort] = useSort("workbench-sort-todo", { key: "manual", dir: 1 });
 
   const add = () => {
     const text = draft.trim();
@@ -615,6 +682,20 @@ function TodosView({ todos, setTodos }) {
 
   const visible = todos.filter((t) => (filter === "all" ? true : filter === "done" ? t.done : !t.done));
   const overdueCount = todos.filter((t) => dueInfo(t)?.kind === "over").length;
+  // "Date" and "Priority" show one flat list; "Manual" keeps the drag-and-drop board.
+  const flatList = (() => {
+    if (sort.key === "manual") return null;
+    const dueKey = (t) => t.due || "9999-99-99";
+    const qi = (t) => QUAD_ORDER.indexOf(quadOf(t));
+    const arr = [...visible];
+    arr.sort((a, b) => {
+      const byDue = dueKey(a) < dueKey(b) ? -1 : dueKey(a) > dueKey(b) ? 1 : 0;
+      const byPri = qi(a) - qi(b);
+      const r = sort.key === "date" ? byDue || byPri : byPri || byDue;
+      return r * sort.dir;
+    });
+    return arr;
+  })();
 
   return (
     <div>
@@ -670,6 +751,15 @@ function TodosView({ todos, setTodos }) {
             {label}
           </button>
         ))}
+        <SortBar
+          sort={sort}
+          setSort={setSort}
+          options={[
+            ["manual", "Board"],
+            ["date", "Date", 1],
+            ["priority", "Priority", 1],
+          ]}
+        />
         <div className="ml-auto flex items-center gap-3 text-[11px]" style={{ color: SUBTEXT }}>
           {[["Overdue", DUE_COLORS.over], ["Due today", DUE_COLORS.today], ["Next 3 days", DUE_COLORS.soon]].map(([l, c]) => (
             <span key={l} className="inline-flex items-center gap-1">
@@ -680,6 +770,15 @@ function TodosView({ todos, setTodos }) {
         </div>
       </div>
 
+      {flatList && (
+        <div className="flex flex-col gap-1.5">
+          {flatList.length === 0 && <EmptyState text="Nothing here yet." />}
+          {flatList.map((t) => (
+            <TodoCard key={t.id} t={t} setTodos={setTodos} toggle={toggle} remove={remove} dnd={dnd} flat />
+          ))}
+        </div>
+      )}
+      {!flatList && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {QUAD_ORDER.map((q) => {
           const items = visible.filter((t) => quadOf(t) === q);
@@ -708,7 +807,7 @@ function TodosView({ todos, setTodos }) {
               className="border rounded-xl p-3 min-h-[180px] transition-colors"
             >
               <div className="flex items-baseline gap-2 mb-2">
-                <div style={{ color: QUADS[q].color }} className="text-sm font-bold">{QUADS[q].label}</div>
+                <div style={{ color: ink(QUADS[q].color) }} className="text-sm font-bold">{QUADS[q].label}</div>
                 <div style={{ color: SUBTEXT }} className="text-[11px]">{QUADS[q].sub}</div>
                 <div style={{ color: SUBTEXT }} className="text-[11px] ml-auto">{items.length}</div>
               </div>
@@ -726,6 +825,7 @@ function TodosView({ todos, setTodos }) {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
@@ -734,7 +834,7 @@ function TodosView({ todos, setTodos }) {
 // Task tracking (project-based, with status stages)
 // ---------------------------------------------------------------------------
 function newTask() {
-  return { id: uid("tk"), title: "", project: "", status: "todo", owner: "", due: "", notes: "", open: true };
+  return { id: uid("tk"), title: "", status: "todo", owner: "", due: "", notes: "", open: true };
 }
 
 function TasksView({ tasks, setTasks }) {
@@ -746,24 +846,13 @@ function TasksView({ tasks, setTasks }) {
 
   const visible = filter === "all" ? tasks : tasks.filter((t) => t.status === filter);
 
-  // group by project, keeping "Unsorted" last
-  const groups = useMemo(() => {
-    const map = new Map();
-    visible.forEach((t) => {
-      const key = t.project.trim() || "Unsorted";
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(t);
-    });
-    const entries = [...map.entries()];
-    entries.sort((a, b) => (a[0] === "Unsorted" ? 1 : b[0] === "Unsorted" ? -1 : a[0].localeCompare(b[0])));
-    return entries;
-  }, [visible]);
+  const groups = [["", visible]];
 
   return (
     <div>
       <SectionHeader
         title="Tasks"
-        subtitle="Grouped by project, tracked by status"
+        subtitle="Tracked by status"
         action={
           <PrimaryButton onClick={add}>
             <Plus size={15} /> New Task
@@ -804,9 +893,6 @@ function TasksView({ tasks, setTasks }) {
       <div className="flex flex-col gap-5">
         {groups.map(([project, list]) => (
           <div key={project}>
-            <div style={{ color: SUBTEXT }} className="text-xs font-bold uppercase tracking-wide mb-2">
-              {project} <span className="opacity-60">· {list.length}</span>
-            </div>
             <div className="flex flex-col gap-2">
               {list.map((t) => (
                 <div key={t.id} style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-lg overflow-hidden">
@@ -837,9 +923,8 @@ function TasksView({ tasks, setTasks }) {
                   </div>
                   {t.open && (
                     <EditPanel initialEditing={!t.title} className="px-4 pb-4 flex flex-col gap-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3">
                         <Field label="Task Name" value={t.title} onChange={(v) => update(t.id, { title: v })} placeholder="e.g. Finish requirements doc" />
-                        <Field label="Project" value={t.project} onChange={(v) => update(t.id, { project: v })} placeholder="e.g. Website redesign" />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <label className="flex flex-col gap-1">
@@ -874,15 +959,120 @@ function TasksView({ tasks, setTasks }) {
 // ---------------------------------------------------------------------------
 // Communication follow-up
 // ---------------------------------------------------------------------------
-function CommsView({ comms, setComms }) {
+const contactExists = (contacts, name) => {
+  const n = (name || "").trim().toLowerCase();
+  return !n || contacts.some((c) => (c.name || "").trim().toLowerCase() === n);
+};
+
+// Asks before a name typed in Follow-ups is saved to Contacts; title and note can be filled in right here.
+function AddContactPrompt({ name, onAdd, onSkip }) {
+  const [role, setRole] = useState("");
+  const [note, setNote] = useState("");
+  const fld = { borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" };
+  return (
+    <div onClick={onSkip} className="fixed inset-0 z-[9000] flex items-start justify-center pt-[16vh] px-4" style={{ backgroundColor: "rgba(0,0,0,0.5)" }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.key === "Escape" && onSkip()}
+        style={{ backgroundColor: PANEL, borderColor: PANEL_LINE }}
+        className="w-full max-w-md rounded-xl border shadow-2xl p-4"
+      >
+        <div style={{ color: TEXT }} className="text-sm font-bold">Add to Contacts?</div>
+        <div style={{ color: SUBTEXT }} className="text-xs mt-1 mb-3">
+          <span style={{ color: TEXT }} className="font-semibold">{name}</span> is not in your Contacts yet.
+        </div>
+        <div className="flex flex-col gap-2.5">
+          <label className="flex flex-col gap-1">
+            <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Title</span>
+            <input
+              autoFocus
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onAdd({ role: role.trim(), notes: note.trim() })}
+              placeholder="e.g. AP Manager"
+              style={fld}
+              className="text-sm rounded-md border px-2.5 py-1.5 outline-none"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Note</span>
+            <textarea
+              rows={3}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Anything worth remembering about this person"
+              style={fld}
+              className="text-sm rounded-md border px-2.5 py-1.5 outline-none resize-none"
+            />
+          </label>
+        </div>
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onSkip} style={{ color: SUBTEXT, borderColor: PANEL_LINE }} className="text-sm rounded-full border px-4 py-1.5">
+            Not now
+          </button>
+          <PrimaryButton onClick={() => onAdd({ role: role.trim(), notes: note.trim() })}>
+            <Plus size={14} /> Add to Contacts
+          </PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Contact field for a follow-up: pick from Contacts or type a new name; saved when you leave the field.
+function ContactPick({ value, onCommit }) {
+  const [v, setV] = useState(value || "");
+  useEffect(() => setV(value || ""), [value]);
+  return (
+    <label className="flex flex-col gap-1">
+      <span style={{ color: SUBTEXT }} className="text-[11px] tracking-wide">Contact</span>
+      <LockInput
+        list="comm-contact-list"
+        value={v}
+        placeholder="Pick from Contacts or type a new name"
+        onChange={(e) => setV(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        onFocus={(e) => (e.target.style.borderColor = AMBER)}
+        onBlur={(e) => {
+          e.target.style.borderColor = PANEL_LINE;
+          onCommit(v.trim());
+        }}
+        className="text-sm rounded-md border px-2.5 py-1.5 min-h-[34px]"
+      />
+    </label>
+  );
+}
+
+function CommsView({ comms, setComms, contacts, setContacts }) {
   const [draftSubject, setDraftSubject] = useState("");
   const [draftContact, setDraftContact] = useState("");
   const [draftStatus, setDraftStatus] = useState("tobesend");
   const [filter, setFilter] = useState("all");
 
+  // name waiting for "add to Contacts?"; names you said "Not now" to are not asked again this session
+  const [pendingContact, setPendingContact] = useState(null);
+  const skipped = useRef(new Set());
+  const askToAdd = (name) => {
+    const n = (name || "").trim();
+    if (!n || contactExists(contacts, n) || skipped.current.has(n.toLowerCase())) return;
+    setPendingContact(n);
+  };
+  const confirmAdd = ({ role, notes }) => {
+    const name = pendingContact;
+    setContacts((prev) =>
+      contactExists(prev, name) ? prev : [{ ...newContact(), name, role, notes, open: false }, ...prev]
+    );
+    setPendingContact(null);
+  };
+  const skipAdd = () => {
+    if (pendingContact) skipped.current.add(pendingContact.toLowerCase());
+    setPendingContact(null);
+  };
+
   const add = () => {
     const subject = draftSubject.trim();
     if (!subject) return;
+    askToAdd(draftContact);
     setComms((prev) => [
       { id: uid("cm"), subject, contact: draftContact.trim(), status: draftStatus, date: todayStr(), notes: "", open: true },
       ...prev,
@@ -894,10 +1084,31 @@ function CommsView({ comms, setComms }) {
   const remove = (id) => setComms((prev) => prev.filter((c) => c.id !== id));
   const toggleOpen = (id) => update(id, { open: !comms.find((c) => c.id === id).open });
 
-  const visible = filter === "all" ? comms : comms.filter((c) => c.status === filter);
+  const [sort, setSort] = useSort("workbench-sort-comms", { key: "manual", dir: 1 });
+  const filtered = filter === "all" ? comms : comms.filter((c) => c.status === filter);
+  const statusOrder = Object.keys(COMM_STATUS);
+  const visible = (() => {
+    if (sort.key === "manual") return filtered;
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      if (sort.key === "date") return ((a.date || "") < (b.date || "") ? -1 : (a.date || "") > (b.date || "") ? 1 : 0) * sort.dir;
+      if (sort.key === "status") return (statusOrder.indexOf(a.status) - statusOrder.indexOf(b.status)) * sort.dir;
+      const ca = (a.contact || "").trim().toLowerCase(), cb = (b.contact || "").trim().toLowerCase();
+      if (!ca && cb) return 1;
+      if (ca && !cb) return -1;
+      return ca.localeCompare(cb) * sort.dir;
+    });
+    return arr;
+  })();
 
   return (
     <div>
+      {pendingContact && <AddContactPrompt key={pendingContact} name={pendingContact} onAdd={confirmAdd} onSkip={skipAdd} />}
+      <datalist id="comm-contact-list">
+        {contacts.filter((c) => (c.name || "").trim()).map((c) => (
+          <option key={c.id} value={c.name.trim()} />
+        ))}
+      </datalist>
       <SectionHeader title="Follow-ups" subtitle="Track who you're waiting on and what's still open" />
 
       <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-lg p-3 mb-4 flex flex-col sm:flex-row gap-2">
@@ -910,10 +1121,11 @@ function CommsView({ comms, setComms }) {
           className="flex-1 text-sm rounded-md border px-2.5 py-1.5 outline-none"
         />
         <input
+          list="comm-contact-list"
           value={draftContact}
           onChange={(e) => setDraftContact(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="Who, e.g. Procurement — Lee"
+          placeholder="Who — pick from Contacts or type"
           style={{ borderColor: PANEL_LINE, color: TEXT, backgroundColor: "rgba(0,0,0,0.15)" }}
           className="sm:w-52 text-sm rounded-md border px-2.5 py-1.5 outline-none"
         />
@@ -959,6 +1171,18 @@ function CommsView({ comms, setComms }) {
           </button>
         ))}
       </div>
+      <div className="mb-3">
+        <SortBar
+          sort={sort}
+          setSort={setSort}
+          options={[
+            ["manual", "Newest added"],
+            ["date", "Date", -1],
+            ["status", "Status", 1],
+            ["contact", "Contact", 1],
+          ]}
+        />
+      </div>
 
       {visible.length === 0 && <EmptyState text="No follow-ups match this filter." />}
       <div className="flex flex-col gap-2">
@@ -990,7 +1214,7 @@ function CommsView({ comms, setComms }) {
               <EditPanel initialEditing={!c.subject} className="px-3 pb-3 flex flex-col gap-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Subject" value={c.subject} onChange={(v) => update(c.id, { subject: v })} placeholder="What's this about" />
-                  <Field label="Contact" value={c.contact} onChange={(v) => update(c.id, { contact: v })} placeholder="Who this involves" />
+                  <ContactPick value={c.contact} onCommit={(v) => { if (v !== (c.contact || "")) { update(c.id, { contact: v }); askToAdd(v); } }} />
                 </div>
                 <TextAreaField label="Notes" value={c.notes} onChange={(v) => update(c.id, { notes: v })} placeholder="What was said, what's needed next…" rows={3} />
               </EditPanel>
@@ -2202,6 +2426,29 @@ function CpTaskRow({ color, m, t, setState, onEdit, onDragStart, onDragEnd, drag
   );
 }
 
+function MonthSummary({ m, patchMonth }) {
+  const [editing, setEditing] = useState(!(m.summary || "").trim());
+  return (
+    <LockCtx.Provider value={!editing}>
+      <div style={{ borderColor: PANEL_LINE, backgroundColor: PANEL }} className="border rounded-xl p-4 mt-6">
+        <div className="flex items-center gap-2 mb-2">
+          <div style={{ color: TEXT }} className="text-sm font-bold">Monthly summary</div>
+          <div style={{ color: SUBTEXT }} className="text-[11px]">{m.label}</div>
+          <div className="ml-auto">
+            <EditToggle editing={editing} onClick={() => setEditing((v) => !v)} />
+          </div>
+        </div>
+        <AutoTextArea
+          value={m.summary || ""}
+          onChange={(v) => patchMonth((x) => ({ ...x, summary: v }))}
+          placeholder="What happened this close? Key variances, issues, things to carry forward, lessons learned…"
+          minHeight="220px"
+        />
+      </div>
+    </LockCtx.Provider>
+  );
+}
+
 function ClosePlanView({ plan, setPlan }) {
   const [filter, setFilter] = useState("all");
   const [editingId, setEditingId] = useState(null);
@@ -2579,6 +2826,8 @@ function ClosePlanView({ plan, setPlan }) {
           </span>
         ))}
       </div>
+
+      <MonthSummary key={m.id} m={m} patchMonth={patchMonth} />
     </div>
   );
 }
@@ -2705,14 +2954,15 @@ function Ambient({ kind }) {
     let w = (canvas.width = window.innerWidth);
     let h = (canvas.height = window.innerHeight);
     const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-    const count = kind === "snow" ? 70 : kind === "stars" ? 46 : 30;
+    const count = kind === "snow" ? 70 : kind === "stars" ? 46 : kind === "doodle" ? 16 : 30;
     const starColors = ["#FFE08A", "#FFB3D9", "#FFFFFF"];
     const petalColors = kind === "sakura" ? ["#FFD3E2", "#FFE9F0", "#FFFFFF", "#F8A9C4"] : ["#F9C5D1", "#FFFFFF", "#FBE38E", "#C8E6A0"];
     const items = Array.from({ length: count }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
-      r: kind === "snow" ? 1 + Math.random() * 2.6 : kind === "stars" ? 3 + Math.random() * 5 : 4 + Math.random() * 5,
-      v: kind === "stars" ? 0.1 + Math.random() * 0.25 : 0.4 + Math.random() * 1.1,
+      r: kind === "snow" ? 1 + Math.random() * 2.6 : kind === "stars" ? 3 + Math.random() * 5 : kind === "doodle" ? 7 + Math.random() * 7 : 4 + Math.random() * 5,
+      s: Math.floor(Math.random() * 4),
+      v: kind === "stars" ? 0.1 + Math.random() * 0.25 : kind === "doodle" ? 0.2 + Math.random() * 0.45 : 0.4 + Math.random() * 1.1,
       d: Math.random() * Math.PI * 2,
       rot: Math.random() * Math.PI * 2,
       c: kind === "stars" ? pick(starColors) : (kind === "petals" || kind === "sakura") ? pick(petalColors) : "#FFFFFF",
@@ -2753,6 +3003,33 @@ function Ambient({ kind }) {
         } else if (kind === "stars") {
           ctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(f.d * 2));
           star(f.x, f.y, f.r);
+        } else if (kind === "doodle") {
+          // pencil-outline doodles: circle, star, heart, squiggle
+          ctx.globalAlpha = 0.2;
+          ctx.strokeStyle = "#2B2A28";
+          ctx.lineWidth = 1.5;
+          ctx.lineCap = "round";
+          ctx.save();
+          ctx.translate(f.x, f.y);
+          ctx.rotate(Math.sin(f.rot * 0.5) * 0.5);
+          ctx.beginPath();
+          const r = f.r;
+          if (f.s === 0) ctx.arc(0, 0, r, 0, Math.PI * 2);
+          else if (f.s === 1) {
+            for (let i = 0; i <= 10; i++) {
+              const rad = i % 2 === 0 ? r : r * 0.45;
+              const ang = (Math.PI / 5) * i - Math.PI / 2;
+              ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
+            }
+          } else if (f.s === 2) {
+            ctx.moveTo(0, r * 0.8);
+            ctx.bezierCurveTo(-r * 1.6, -r * 0.2, -r * 0.6, -r * 1.2, 0, -r * 0.3);
+            ctx.bezierCurveTo(r * 0.6, -r * 1.2, r * 1.6, -r * 0.2, 0, r * 0.8);
+          } else {
+            for (let i = -3; i <= 3; i += 0.25) ctx.lineTo(i * r * 0.45, Math.sin(i * 2) * r * 0.35);
+          }
+          ctx.stroke();
+          ctx.restore();
         } else {
           ctx.globalAlpha = 0.85;
           ctx.save();
@@ -2871,7 +3148,7 @@ function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey, fx, setFx })
           on={fx.ambient}
           onChange={(v) => setFx({ ambient: v })}
           label="Background effects"
-          hint="Falling snow, stars or petals on the Christmas, Sailor Moon, Garden and Sakura themes."
+          hint="Falling snow, stars, petals or pencil doodles on the Christmas, Sailor Moon, Garden, Sakura and Doodle themes."
         />
       </div>
       <div className="mt-3">
@@ -2898,8 +3175,8 @@ function SettingsView({ themeKey, setThemeKey, fontKey, setFontKey, fx, setFx })
 // ---------------------------------------------------------------------------
 // Dashboard charts (plain SVG/HTML, theme-aware)
 // ---------------------------------------------------------------------------
-const TRACK = "rgba(255,255,255,0.12)";
-const GRID = "rgba(255,255,255,0.08)";
+const TRACK = "var(--wb-track)";
+const GRID = "var(--wb-grid)";
 const cpIsDone = (m, t) => !!m.state[t.id + "-p"] && (t.rev == null || !!m.state[t.id + "-r"]);
 const shortDay = (d) => d.replace("Preclose", "Pre").replace("Post Close", "Post").replace("Day ", "D");
 
@@ -3355,7 +3632,7 @@ function DashboardView({ meetings, todos, tasks, comms, entries, contacts, notes
               {stuckTasks.map((t) => (
                 <div key={t.id} className="flex items-center justify-between text-sm">
                   <span style={{ color: TEXT }} className="truncate">{t.title || "Untitled task"}</span>
-                  <span style={{ color: DANGER }} className="text-xs shrink-0 ml-2">{t.project || "Unsorted"}</span>
+                  <span style={{ color: DANGER }} className="text-xs shrink-0 ml-2">{t.owner || ""}</span>
                 </div>
               ))}
             </div>
@@ -3525,7 +3802,7 @@ async function exportBackup() {
     Subject: c.subject, Contact: c.contact, Status: lbl(COMM_STATUS, c.status), Date: c.date, Notes: c.notes,
   })), [40, 22, 16, 12, 60]);
   add("Tasks", readJson(STORE_KEYS.tasks, []).map((t) => ({
-    Title: t.title, Project: t.project, Status: lbl(TASK_STATUS, t.status), Owner: t.owner, Due: t.due, Notes: t.notes,
+    Title: t.title, Status: lbl(TASK_STATUS, t.status), Owner: t.owner, Due: t.due, Notes: t.notes,
   })), [36, 22, 14, 16, 12, 60]);
   add("Meetings", readJson(STORE_KEYS.meetings, []).map((m) => ({
     Title: m.title, Date: m.date, Attendees: m.attendees, Notes: m.notes,
@@ -3552,6 +3829,7 @@ async function exportBackup() {
     });
   });
   add("Close Plan", cpRows, [16, 12, 18, 50, 14, 14, 10, 10, 14]);
+  add("Monthly Summary", (plan?.months || []).filter((m) => (m.summary || "").trim()).map((m) => ({ Month: m.label, Summary: m.summary })), [18, 110]);
 
   // Hidden sheet holding the full data, used by "Import backup".
   const data = {};
@@ -3644,11 +3922,14 @@ function GlobalSearch({ onClose, data, go }) {
     const push = (type, title, sub, tab, extra) => out.push({ type, title: title || "(untitled)", sub: sub || "", tab, extra, hay: `${title} ${sub}`.toLowerCase() });
     data.notes.forEach((n) => push("Note", n.text, (n.createdAt || "").slice(0, 10), "notes"));
     data.todos.forEach((t) => push("To-Do", t.text, [QUADS[quadOf(t)].label, t.due].filter(Boolean).join(" · "), "todos"));
-    data.tasks.forEach((t) => push("Task", t.title, [t.project, t.owner, t.notes].filter(Boolean).join(" · "), "tasks"));
+    data.tasks.forEach((t) => push("Task", t.title, [t.owner, t.notes].filter(Boolean).join(" · "), "tasks"));
     data.comms.forEach((c) => push("Follow-up", c.subject, [c.contact, c.notes].filter(Boolean).join(" · "), "comms"));
     data.meetings.forEach((m) => push("Meeting", m.title, [m.date, m.attendees, m.notes].filter(Boolean).join(" · "), "meetings"));
     data.contacts.forEach((c) => push("Contact", c.name, [c.role, c.contactInfo, c.notes].filter(Boolean).join(" · "), "contacts"));
     data.entries.forEach((e) => push("JE", `${e.entity} ${e.jid}`.trim(), [ENTRY_STATUS[e.status]?.label, e.approver, e.note].filter(Boolean).join(" · "), "je"));
+    (data.closePlan?.months || []).forEach((m) => {
+      if ((m.summary || "").trim()) push("Summary", `${m.label} summary`, m.summary, "close", m.id);
+    });
     (data.closePlan?.months || []).forEach((m) =>
       m.tasks.forEach((t) => push("Close Plan", t.name, [m.label, t.day, t.cat, t.prep].filter(Boolean).join(" · "), "close", m.id))
     );
@@ -3767,6 +4048,8 @@ export default function PersonalWorkbench() {
     try {
       localStorage.setItem(THEME_KEY, k);
     } catch {}
+    const th = THEMES.find((x) => x.key === k);
+    if (th && th.font) setFontKey(th.font);
   };
   const [searchOpen, setSearchOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -3987,7 +4270,7 @@ export default function PersonalWorkbench() {
         {tab === "meetings" && <MeetingsView meetings={meetings} setMeetings={setMeetings} />}
         {tab === "todos" && <TodosView todos={todos} setTodos={setTodos} />}
         {tab === "tasks" && <TasksView tasks={tasks} setTasks={setTasks} />}
-        {tab === "comms" && <CommsView comms={comms} setComms={setComms} />}
+        {tab === "comms" && <CommsView comms={comms} setComms={setComms} contacts={contacts} setContacts={setContacts} />}
         {tab === "contacts" && <ContactsView contacts={contacts} setContacts={setContacts} />}
         {tab === "notes" && <NotesView notes={notes} setNotes={setNotes} />}
         {tab === "close" && closePlan && <ClosePlanView plan={closePlan} setPlan={setClosePlan} />}
